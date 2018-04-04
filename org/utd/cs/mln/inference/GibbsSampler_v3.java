@@ -75,7 +75,7 @@ public class GibbsSampler_v3 extends MCMC{
 
     @Override
     void infer() {
-        initNumValPerPred();
+        initNumValPerChainPerPred();
         // Burn-in only if burnMaxSteps positive
         boolean burningIn = (burnMaxSteps > 0) ? true : false;
 
@@ -102,7 +102,7 @@ public class GibbsSampler_v3 extends MCMC{
 
         // Sampling loop
         int sample = 0;
-        int numSamplesPerPred = 0;
+        int numSamplesPerChainPerPred = 0;
         boolean done = false;
         long time = System.currentTimeMillis();
         double secondsElapsed = 0;
@@ -116,29 +116,30 @@ public class GibbsSampler_v3 extends MCMC{
             }
 
             GibbsPerChain gibbsPerChain;
-            Thread t[] = new Thread[numChains];
-            Thread.currentThread().setPriority(10);
+//            Thread t[] = new Thread[numChains];
+//            Thread.currentThread().setPriority(10);
             // For each chain, for each node, generate the node's new truth value
             for (int c = 0; c < numChains; c++) {
                 gibbsPerChain = new GibbsPerChain(c, burningIn, trackFormulaTrueCnts);
-                t[c] = new Thread(gibbsPerChain);
-                t[c].setPriority(1);
+                gibbsPerChain.run();
+//                t[c] = new Thread(gibbsPerChain);
+//                t[c].setPriority(1);
             }
-            try {
-                for (int c = 0; c < numChains; c++) {
-                    t[c].start();
-                }
-                //System.out.println("Waiting for numChains threads to finish.");
-                Thread.currentThread().setPriority(1);
-                for (int c = 0; c < numChains; ++c) {
-                    t[c].join();
-                }
-                Thread.currentThread().setPriority(10);
-            }
-            catch (InterruptedException e) {
-                System.out.println("Main thread Interrupted");
-            }
-            if (!burningIn) numSamplesPerPred+= numChains;
+//            try {
+//                for (int c = 0; c < numChains; c++) {
+//                    t[c].start();
+//                }
+//                //System.out.println("Waiting for numChains threads to finish.");
+//                Thread.currentThread().setPriority(1);
+//                for (int c = 0; c < numChains; ++c) {
+//                    t[c].join();
+//                }
+//                Thread.currentThread().setPriority(10);
+//            }
+//            catch (InterruptedException e) {
+//                System.out.println("Main thread Interrupted");
+//            }
+            if (!burningIn) numSamplesPerChainPerPred++;
 
 
             // Add current truth values to the convergence testers
@@ -196,7 +197,7 @@ public class GibbsSampler_v3 extends MCMC{
                     if (testConvergence)
                     {
                         System.out.println(" (" + (gibbsConverged? "converged":"didn't converge")
-                                +" at total of " + numSamplesPerPred + " samples per pred)");
+                                +" at total of " + numSamplesPerChainPerPred + " samples per chain per pred)");
                     }
                     done = true;
                 }
@@ -204,13 +205,16 @@ public class GibbsSampler_v3 extends MCMC{
         }
         System.out.println("Time taken for Gibbs sampling : "+Timer.time((System.currentTimeMillis() - time) / 1000.0));
         // update gndPreds probability
-        for (int g = 0; g < numValPerPred_.size(); g++) {
-            for(int val = 0 ; val < numValPerPred_.get(g).size() ; val++)
-            {
-                double p = numValPerPred_.get(g).get(val)/numSamplesPerPred;
-                numValPerPred_.get(g).set(val,p);
+        for (int c = 0; c < numChains; c++) {
+            for (int g = 0; g < numValPerChainPerPred_.get(c).size(); g++) {
+                for(int val = 0 ; val < numValPerChainPerPred_.get(c).get(g).size() ; val++)
+                {
+                    double p = numValPerChainPerPred_.get(c).get(g).get(val)/numSamplesPerChainPerPred;
+                    numValPerChainPerPred_.get(c).get(g).set(val,p);
+                }
             }
         }
+
     }
 
 
@@ -227,7 +231,7 @@ public class GibbsSampler_v3 extends MCMC{
             int assignment = performGibbsStep(chainIdx,gpId, (gpId+1)%numGndPreds);
             // If in actual gibbs sampling phase, update numValPerPred
             if(!burningIn)
-                numValPerPred_.get(gpId).set(assignment, numValPerPred_.get(gpId).get(assignment)+1);
+                numValPerChainPerPred_.get(chainIdx).get(gpId).set(assignment, numValPerChainPerPred_.get(chainIdx).get(gpId).get(assignment)+1);
         }
     }
 

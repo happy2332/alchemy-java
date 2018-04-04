@@ -128,4 +128,11 @@ public class State {
         }
         return numTrueGndings;
     }
+
+    public void setTruthVals(Evidence truthVals) {
+        for(int gpId : truthVals.predIdVal.keySet())
+        {
+            this.truthVals.set(gpId, truthVals.predIdVal.get(gpId));
+        }
+    }
 }

@@ -585,6 +585,8 @@ public class Parser {
             }
 
             int gpIndex = groundMln.groundPredicates.indexOf(gp);
+            if(gpIndex == -1)
+                System.out.println("error in Parser::parseEvidence()");
             evidence.predIdVal.put(gpIndex, Integer.parseInt(value));
         }
         return evidence;

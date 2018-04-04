@@ -216,6 +216,7 @@ public class FullyGrindingMill {
         {
             groundMln.symbols.add(new GroundPredicateSymbol(symbol.id, symbol.symbol, symbol.values, symbol.variable_types));
         }
+        groundMln.setGroundPredToIntegerMap();
         return groundMln;
     }
 
@@ -632,6 +633,7 @@ public class FullyGrindingMill {
         if(truth != null) {
             truth.predIdVal = newGpIndexToTrueVal;
         }
+        newGroundMln.setGroundPredToIntegerMap();
         return newGroundMln;
     }
 

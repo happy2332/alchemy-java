@@ -6,6 +6,7 @@ import org.utd.cs.gm.utility.Timer;
 import org.utd.cs.mln.alchemy.core.*;
 import org.utd.cs.mln.alchemy.util.FullyGrindingMill;
 import org.utd.cs.mln.alchemy.util.Parser;
+import org.utd.cs.mln.learning.PseudoLogLikelihood;
 import org.utd.cs.mln.lmap.MlnToHyperCube;
 
 import java.io.FileNotFoundException;
@@ -100,6 +101,7 @@ public class InferTest {
 
         //GibbsSampler_v2 gs = new GibbsSampler_v2(mln, groundMln, gold, NumBurnIn, NumSamples, trackFormulaCounts, calculateMarginal, priorSoftEvidence, false);
         State state = new State(mln, groundMln);
+        state.setTruthVals(gold);
         GibbsParams gibbsparams = new GibbsParams();
         Inference inference = new GibbsSampler_v3(state,-1,false,false,gibbsparams);
         PrintWriter writer = null;
@@ -111,9 +113,11 @@ public class InferTest {
 //        gs.infer(true, true);
 //        gs.writeMarginal(writer);
         //inference.writeNetwork(writer);
-        inference.init();
-        inference.infer();
-        inference.writeProbs(writer);
+        PseudoLogLikelihood pll = new PseudoLogLikelihood(state);
+        System.out.println("pll : "+pll.getPseudoLogLikelihood());
+        //inference.init();
+        //inference.infer();
+        //inference.writeProbs(writer);
         writer.close();
     }
 

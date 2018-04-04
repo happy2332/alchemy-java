@@ -41,7 +41,7 @@ public abstract class MCMC extends Inference {
 
     // Holds number of times a ground predicate is set to a value
     // numValPerPred[g][val]
-    List<List<Double>> numValPerPred_;
+    List<List<List<Double>>> numValPerChainPerPred_;
 
     // For each chain, for each ground predicate, for each possible value, stores satweight
     List<List<List<Double>>> wtsPerPredPerVal;
@@ -106,7 +106,8 @@ public abstract class MCMC extends Inference {
      * Generates a random integer from 0 to n-1
      */
     int getUniformAssignment(int n) {
-        return rand.nextInt(n);
+        int r = rand.nextInt(n);
+        return r;
     }
 
     // According to present truthVals, set falseClausesSet and numSatLiterals
@@ -145,15 +146,19 @@ public abstract class MCMC extends Inference {
      * Initializes structure for holding number of times a predicate was set
      * to each value.
      */
-    void initNumValPerPred()
+    void initNumValPerChainPerPred()
     {
-        numValPerPred_ = new ArrayList<>();
-        int numGndPreds = state.groundMLN.groundPredicates.size();
-        for (int g = 0; g < numGndPreds; g++) {
-            GroundPredicate gp = state.groundMLN.groundPredicates.get(g);
-            int numPossibleVals = gp.numPossibleValues;
-            numValPerPred_.add(new ArrayList<>(Collections.nCopies(numPossibleVals,0.0)));
+        numValPerChainPerPred_ = new ArrayList<>();
+        for (int chainIdx = 0; chainIdx < numChains; chainIdx++) {
+            numValPerChainPerPred_.add(new ArrayList<List<Double>>());
+            int numGndPreds = state.groundMLN.groundPredicates.size();
+            for (int g = 0; g < numGndPreds; g++) {
+                GroundPredicate gp = state.groundMLN.groundPredicates.get(g);
+                int numPossibleVals = gp.numPossibleValues;
+                numValPerChainPerPred_.get(chainIdx).add(new ArrayList<>(Collections.nCopies(numPossibleVals,0.0)));
+            }
         }
+
     }
 
     public void updateWtsForGndPreds(List<Integer> affectedGndPredIndices, int chainIndex) {
@@ -407,12 +412,18 @@ public abstract class MCMC extends Inference {
 
     public void writeProbs(PrintWriter writer)
     {
-        for(int g = 0 ; g < numValPerPred_.size() ; g++)
+        int numGroundPreds = state.groundMLN.groundPredicates.size();
+        for(int g = 0 ; g < numGroundPreds ; g++)
         {
-            for(int val = 0 ; val < numValPerPred_.get(g).size() ; val++)
+            int numVals = state.groundMLN.groundPredicates.get(g).numPossibleValues;
+            for(int val = 0 ; val < numVals ; val++)
             {
-                double marginal = numValPerPred_.get(g).get(val);
-                writer.println(state.groundMLN.groundPredicates.get(g) + "=" + val + " " + marginal);
+                double marginal = 0.0;
+                for (int c = 0; c < numChains; c++) {
+                    marginal += numValPerChainPerPred_.get(c).get(g).get(val);
+                }
+                double marginal_prob = marginal/numChains;
+                writer.printf(state.groundMLN.groundPredicates.get(g) + "=" + val + " %.4f\n",marginal_prob);
             }
         }
     }

@@ -334,7 +334,7 @@ public class GenLearner extends WeightLearner{
         };
         LBFGS.Params p = new LBFGS.Params();
             p.m = 5;
-            p.epsilon = 1.0E-4D;
+            p.epsilon = 1.0E-5D;
 //            p.past = 5;
 //            p.delta = 1.0E-7D;
 
@@ -342,8 +342,8 @@ public class GenLearner extends WeightLearner{
             @Override
             public int apply(double[] x, double[] g, double fx, double xnorm,
                              double gnorm, double step, int n, int k, LBFGS.Status ls) {
-                if(k % 10 == 0) {
-                    U.pf("ITER %d obj=%g\n", k, fx);
+                if(k % 1 == 0) {
+                    U.pf("ITER %d obj=%g |proj g|=%g\n", k, fx, gnorm);
                     System.out.println("Weights: "+Arrays.toString(x));
                     System.out.println("Gradient: "+Arrays.toString(g));
                     System.out.println("Elapsed Time : " + Timer.time((System.currentTimeMillis() - time) / 1000.0));
