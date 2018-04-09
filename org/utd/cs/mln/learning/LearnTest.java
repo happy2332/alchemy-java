@@ -55,24 +55,25 @@ public class LearnTest {
             MLN mln = new MLN();
             mlns.add(mln);
             Parser parser = new Parser(mln);
+            System.out.println("Reading DB file "+(i+1));
+            List<String> files = new ArrayList<>();
+            files.add(lArgs.truthFiles.get(i));
+            if(lArgs.evidenceFiles != null)
+                files.add(lArgs.evidenceFiles.get(i));
+            //TODO : for now, we send only truth file to collectDomain, otherwise send both truth and evidence.
+            // We assume that there is no new constant in evidence.
+            //Map<String, Set<Integer>> varTypeToDomain = parser.collectDomain(files);
+            parser.setTruthEvidFiles(files);
             parser.parseInputMLNFile(lArgs.mlnFile);
             // Need to set query and evidence predicates only once, they will be same for all DBs
             if(i == 0)
                 setQueryEvidPreds(mln, lArgs, closedWorldPreds);
-            System.out.println("Reading DB file "+(i+1));
-            String files[] = new String[1];
-            //files[0] = evidenceFiles[i];
-            files[0] = lArgs.truthFiles.get(i);
-            //TODO : for now, we send only truth file to collectDomain, otherwise send both truth and evidence.
-            // We assume that there is no new constant in evidence.
-            Map<String, Set<Integer>> varTypeToDomain = parser.collectDomain(files);
-            mln.overWriteDomain(varTypeToDomain);
 
             if(lArgs.genLearn)
             {
                 // This groundMLN will contain only list of groundPredicates, not groundformulas since we are not grounding MLN.
                 GroundMLN groundMLN = new GroundMLN();
-                List<GroundPredicate> groundPredicates = fgm.createGroundPredicates(mln, varTypeToDomain);
+                List<GroundPredicate> groundPredicates = fgm.createGroundPredicates(mln);
                 groundMLN.groundPredicates = groundPredicates;
                 groundMLN.setGroundPredToIntegerMap();
                 groundMlns.add(groundMLN);

@@ -41,11 +41,10 @@ public class InferTest {
         }
         closedWorldPreds.addAll(iArgs.evidPreds);
         closedWorldPreds.removeAll(iArgs.queryPreds);
-        String files[] = new String[2];
-        files[0] = iArgs.evidFile;
-        files[1] = iArgs.goldFile;
-        Map<String, Set<Integer>> varTypeToDomain = parser.collectDomain(files);
-        mln.overWriteDomain(varTypeToDomain);
+        List<String> files = new ArrayList<>();
+        files.add(iArgs.goldFile);
+        files.add(iArgs.evidFile);
+        parser.setTruthEvidFiles(files);
         boolean isgroundwithhypercube = true;
         GroundMLN groundMln = null;
         Evidence gold = null;
@@ -113,11 +112,11 @@ public class InferTest {
 //        gs.infer(true, true);
 //        gs.writeMarginal(writer);
         //inference.writeNetwork(writer);
-        PseudoLogLikelihood pll = new PseudoLogLikelihood(state);
-        System.out.println("pll : "+pll.getPseudoLogLikelihood());
-        //inference.init();
-        //inference.infer();
-        //inference.writeProbs(writer);
+        //PseudoLogLikelihood pll = new PseudoLogLikelihood(state);
+        //System.out.println("pll : "+pll.getPseudoLogLikelihood());
+        inference.init();
+        inference.infer();
+        inference.writeProbs(writer);
         writer.close();
     }
 

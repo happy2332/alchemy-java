@@ -26,8 +26,8 @@ public class Term {
 	*/
 	public Term(String type_, int value) {
 		type = type_;
-		domain = new ArrayList<Integer>(1);
-		domain.set(0, value);
+		domain = new ArrayList<>();
+		domain.add(value);
 	}
 
 	Term(Term term) {
@@ -43,9 +43,6 @@ public class Term {
 				+ segmentDomain + "]";
 	}
 	*/
-	// Marginal MAP
-	public String toString() {
-		return this.type+"";
-	}
+
 
 }

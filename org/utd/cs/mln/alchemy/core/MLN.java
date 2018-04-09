@@ -16,19 +16,18 @@ public class MLN {
 	public int max_predicate_id;
 	public int maxDegree;
 	public List<PredicateSymbol> symbols = new ArrayList<PredicateSymbol>();
-	public List<Domain> domainList;
-	public Map<Integer, ArrayList<Integer>> predicateDomainMap;
-	public Map<String, Set<Integer>> varTypeToDomainMap = new HashMap<String, Set<Integer>>();
+	public Map<Integer, List<String>> predicateDomainMap = new HashMap<>();
+	public Map<String, Set<Integer>> varTypeToDomainMap = new HashMap<>();
 	public List<WClause> clauses = new ArrayList<WClause>();
 	public List<Formula> formulas = new ArrayList<Formula>();
 	public double numSubNetworks = 1;
 
-	public MLN(MLN mln){
-		for(WClause clause : mln.clauses) {
-			WClause newClause = MLN.create_new_clause(clause);
-			clauses.add(newClause);
-		}
-	}
+//	public MLN(MLN mln){
+//		for(WClause clause : mln.clauses) {
+//			WClause newClause = MLN.create_new_clause(clause);
+//			clauses.add(newClause);
+//		}
+//	}
 
 	public static Formula create_new_formula(Formula formula)
 	{
@@ -394,12 +393,12 @@ public class MLN {
 	}
 
 	public MLN() {
+
 		max_predicate_id = (0);
 		maxDegree = (-1);
 	}
 
-	public void overWriteDomain(Map<String, Set<Integer>> varTypeToDomain) {
-		varTypeToDomainMap = varTypeToDomain;
+	public void overWriteDomain() {
 		for(Formula formula : formulas)
 		{
 			for(WClause clause : formula.clauses)
@@ -408,7 +407,7 @@ public class MLN {
 				{
 					for(Term term : atom.terms)
 					{
-						Set<Integer> domain = varTypeToDomain.get(term.type);
+						Set<Integer> domain = varTypeToDomainMap.get(term.type);
 						term.domain.clear();
 						term.domain.addAll(domain);
 					}

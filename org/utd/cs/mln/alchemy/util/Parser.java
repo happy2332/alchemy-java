@@ -31,11 +31,11 @@ public class Parser {
     public static final String COMMENT = "//";
 
 	private static final String REGEX_ESCAPE_CHAR = "\\";
+    private List<String> truthEvidFiles;
 
 
-    public Map<String, Set<Integer>> collectDomain(String files[]) throws FileNotFoundException {
+    public void collectDomain(List<String> files) throws FileNotFoundException {
 
-        Map<String, Set<Integer>> varTypeToDomain = new HashMap<>();
         for(String file : files)
         {
             if(file != null)
@@ -58,11 +58,7 @@ public class Parser {
                             for(int i = 0 ; i < termNames.length ; i++)
                             {
                                 String var_type = symbol.variable_types.get(i);
-                                if(!varTypeToDomain.containsKey(var_type))
-                                {
-                                    varTypeToDomain.put(var_type, new HashSet<Integer>());
-                                }
-                                varTypeToDomain.get(var_type).add(Integer.parseInt(termNames[i]));
+                                mln.varTypeToDomainMap.get(var_type).add(Integer.parseInt(termNames[i]));
                             }
                             break;
                         }
@@ -73,9 +69,11 @@ public class Parser {
             }
         }
 
-        return varTypeToDomain;
     }
 
+    public void setTruthEvidFiles(List<String> truthEvidFiles) {
+        this.truthEvidFiles = truthEvidFiles;
+    }
 
 
     private enum ParserState {
@@ -90,37 +88,42 @@ public class Parser {
 	private int predicateId;
 
 	//set of domains with values in String format
-	private List<Domain> domainList = new ArrayList<Domain>();
+	//private List<Domain> domainList = new ArrayList<Domain>();
+    //private Map<String, Set<Integer>> varTypeToDomainMap = new HashMap<>();
 
 	//List of Values
 	private List<Values> valuesList = new ArrayList<Values>();
 
-	//map key:predicate Id, value:for each of its terms, Index into the domainList List
-	private Map<Integer,ArrayList<Integer>> predicateDomainMap = new HashMap<Integer, ArrayList<Integer>>();
+	//map key:predicate Id, value:type of each term
+	//private Map<Integer,List<String>> predicateDomainMap = new HashMap<>();
 
 
 	public Parser(MLN mln_) {
 		mln = mln_;
-		mln_.domainList = domainList;
-		mln_.predicateDomainMap = predicateDomainMap;
 		predicateId = 0;
 	}
 
 
 	boolean isTermConstant(String term)
 	{
-		//if starts with a capital letter or number, it is taken as a constant
-		return Character.isUpperCase(term.charAt(0));
+		//if its a number, it is taken as a constant
+        try
+        {
+            int num = Integer.parseInt(term);
+            return true;
+        }
+        catch(Exception e)
+        {
+            return false;
+        }
 	}
 
-	Term create_new_term(int domainSize)
+	Term create_new_term(String var_type)
 	{
 		//map domain to an integer domain for ease of manipulation
-		List<Integer> iDomain = new ArrayList<Integer>(domainSize);
-		for(int k=0;k<domainSize;k++)
-			iDomain.add(k);
+		List<Integer> iDomain = new ArrayList<Integer>(mln.varTypeToDomainMap.get(var_type));
 		//create a new term
-		Term term = new Term("0",iDomain);
+		Term term = new Term(var_type,iDomain);
 		return term;
 	}
 
@@ -214,7 +217,7 @@ public class Parser {
             sign.add(false);
             predicateSymbolIndex.add(null);
         }
-
+        System.out.println("line = " + line);
         for(int i=0; i<atomStrings.size(); i++) {
             String[] atomStrings1 = atomStrings.get(i).split(REGEX_ESCAPE_CHAR + EQUALSTO);
             String atomString = atomStrings1[0];
@@ -267,31 +270,34 @@ public class Parser {
 
             for(int k=0; k<sTermsList.get(j).size(); k++)
             {
-                int domainIndex = predicateDomainMap.get(predicateSymbolIndex.get(j)).get(k);
+                int pIndex = predicateSymbolIndex.get(j);
+                PredicateSymbol ps = mln.symbols.get(pIndex);
+                String var_type = ps.variable_types.get(k);
+                //int domainIndex = predicateDomainMap.get(pIndex).get(k);
 
                 //if term is a constant must be a unique term
                 if(isTermConstant(sTermsList.get(j).get(k)))
                 {
                     //find the id of the term
-                    int id=-1;
-                    for(int m=0;m<domainList.get(domainIndex).values.size();m++)
-                    {
-                        if(domainList.get(domainIndex).values.get(m).equals(sTermsList.get(j).get(k)))
-                        {
-                            id=m;
-                            break;
-                        }
-                    }
-                    if(id==-1)
-                    {
-                        System.out.println("Constant does not match predicate's domain. "  + domainList.get(domainIndex).name );
-                        System.exit(-1);
-                    }
-                    iTerms.set(k, new Term("0",id));
+                    int id = Integer.parseInt((sTermsList.get(j).get(k)));
+                    mln.varTypeToDomainMap.get(var_type).add(id);
+//                    for(int m=0;m<domainList.get(domainIndex).values.size();m++)
+//                    {
+//                        if(domainList.get(domainIndex).values.get(m).equals(sTermsList.get(j).get(k)))
+//                        {
+//                            id=m;
+//                            break;
+//                        }
+//                    }
+//                    if(id==-1)
+//                    {
+//                        System.out.println("Constant does not match predicate's domain. "  + domainList.get(domainIndex).name );
+//                        System.exit(-1);
+//                    }
+                    iTerms.set(k, new Term(var_type,id));
                 }
                 else
                 {
-                    int domainSize = domainList.get(domainIndex).values.size();
                     boolean isExistingTerm = false;
                     boolean sameTerminPred = false;
                     int atomIndex=-1;
@@ -306,14 +312,14 @@ public class Parser {
                                 //check if the domains of the matched variables are the same
                                 int atomSymbolIndex1 = predicateSymbolIndex.get(m);
                                 int atomId1 = mln.symbols.get(atomSymbolIndex1).id;
-                                int domainListIndex1 = predicateDomainMap.get(atomId1).get(n);
+                                String varType1 = mln.predicateDomainMap.get(atomId1).get(n);
 
                                 int atomSymbolIndex2 = predicateSymbolIndex.get(j);
                                 int atomId2 = mln.symbols.get(atomSymbolIndex2).id;
-                                int domainListIndex2 = predicateDomainMap.get(atomId2).get(k);
-                                if(!domainList.get(domainListIndex1).name.equals(domainList.get(domainListIndex2).name))
+                                String varType2 = mln.predicateDomainMap.get(atomId2).get(k);
+                                if(!varType1.equals(varType2))
                                 {
-                                    System.out.println("Error! variables do not match type ." + atomStrings.get(j) + "(" + domainList.get(domainListIndex1).name + ", " + domainList.get(domainListIndex2).name + ")" );
+                                    System.out.println("Error! variables do not match type ." + atomStrings.get(j) + "(" + varType1 + ", " + varType2 + ")" );
                                     System.exit(-1);
                                 }
                                 //variable is repeated, use the term created for atom m, term n
@@ -343,7 +349,7 @@ public class Parser {
                     else
                     {
                         //create a new Term
-                        iTerms.set(k, create_new_term(domainSize));
+                        iTerms.set(k, create_new_term(var_type));
                     }
                 }
             }
@@ -375,8 +381,9 @@ public class Parser {
 			}
 		}
 
-		Domain domain = new Domain(domainName,domainValues);
-		domainList.add(domain);
+		//Domain domain = new Domain(domainName,domainValues);
+        mln.varTypeToDomainMap.put(domainName, new HashSet<Integer>());
+		//domainList.add(domain);
 	}
 
 	// Added by Happy
@@ -412,7 +419,11 @@ public class Parser {
 
 		List<String> var_types = new ArrayList<>();
 		for(int m=0; m < termNames.length; m++) {
-			var_types.add(termNames[m]);
+		    if(!mln.varTypeToDomainMap.containsKey(termNames[m])) {
+                System.out.println("Error !!! " + termNames[m] + " type doesn't exist");
+                System.exit(-1);
+            }
+            var_types.add(termNames[m]);
 		}
 
 		int matchingIndex = -1;
@@ -439,28 +450,24 @@ public class Parser {
 		List<Integer> domainIndex = new ArrayList<Integer>();
 		for(int i=0; i<termNames.length; i++)
 		{
-			matchingIndex = -1;
-			for(int j=0;j<domainList.size();j++)
-			{
-				if(termNames[i].equals(domainList.get(j).name))
-				{
-					matchingIndex = j;
-					break;
-				}
-			}
-			if(matchingIndex == -1)
+            if(!mln.varTypeToDomainMap.containsKey(termNames[i]))
 			{
 				System.out.println("Error! Domain does not exist for predicate. " + symbolName );
 				System.exit(-1);
 			}
 			domainIndex.add(matchingIndex);
 		}
-		predicateDomainMap.put(predicateId, (ArrayList<Integer>) domainIndex);
+		mln.predicateDomainMap.put(predicateId, var_types);
 		//increment predicateid
 		predicateId++;
 	}
 
 
+    /**
+     *
+     * @param filename Input MLN file name
+     * @throws FileNotFoundException
+     */
 	public void parseInputMLNFile(String filename) throws FileNotFoundException
 	{
 		Scanner scanner = new Scanner(new BufferedReader(new InputStreamReader(new FileInputStream(filename))));
@@ -503,6 +510,8 @@ public class Parser {
 				break;
 
 			case Formula:
+			    // Fill in varTypeToDomain
+                collectDomain(truthEvidFiles);
 				parseCNFString(line);
 				break;
 

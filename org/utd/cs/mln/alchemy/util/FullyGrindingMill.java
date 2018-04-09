@@ -14,7 +14,7 @@ import java.util.*;
  * Created by Happy on 2/28/17.
  */
 public class FullyGrindingMill {
-    public static boolean fgmdebug = false;
+    public static boolean fgmdebug = true;
     public static int permutationCount;
     private GroundMLN groundMln;
     private Set<GroundFormula> groundFormulaSet = new HashSet<GroundFormula>();
@@ -939,7 +939,7 @@ public class FullyGrindingMill {
         return featureVectors;
     }
 
-    public static List<GroundPredicate> createGroundPredicates(MLN mln, Map<String, Set<Integer>> varTypeToDomain) {
+    public static List<GroundPredicate> createGroundPredicates(MLN mln) {
         List<GroundPredicate> groundPredsList = new ArrayList<GroundPredicate>();
         // For each pred symbol in MLN, create its groundings based on domain of its terms
 
@@ -949,7 +949,7 @@ public class FullyGrindingMill {
             List<Set<Integer>> termDomains = new ArrayList<>();
             for(String varType : ps.variable_types)
             {
-                termDomains.add(varTypeToDomain.get(varType));
+                termDomains.add(mln.varTypeToDomainMap.get(varType));
             }
             List<List<Integer>> permutations = OtherUtils.cartesianProd(termDomains);
             for(List<Integer> perm : permutations)

@@ -30,12 +30,14 @@ public class FeatureCreator {
         MLN mln = new MLN();
         Parser parser = new Parser(mln);
         parser.parseInputMLNFile(mlnFile);
-        Map<String, Set<Integer>> varTypeToDomain = parser.collectDomain(new String[]{dbFile});
-        mln.overWriteDomain(varTypeToDomain);
+        List<String> files = new ArrayList<>();
+        files.add(dbFile);
+        parser.collectDomain(files);
+        mln.overWriteDomain();
         boolean closedWorld = true;
-        GroundMLN groundMLN = createGroundMLN(mln, dbFile, varTypeToDomain);
+        GroundMLN groundMLN = createGroundMLN(mln, dbFile, mln.varTypeToDomainMap);
         Evidence truth = parser.parseEvidence(groundMLN,dbFile);
-        Map<Integer, List<Integer>> features = createFeatures(mln, groundMLN, truth, typeName, varTypeToDomain.get(typeName), closedWorld);
+        Map<Integer, List<Integer>> features = createFeatures(mln, groundMLN, truth, typeName, mln.varTypeToDomainMap.get(typeName), closedWorld);
         writeFeatures(features, outFile);
     }
 
@@ -55,7 +57,7 @@ public class FeatureCreator {
     private static GroundMLN createGroundMLN(MLN mln, String dbFile, Map<String, Set<Integer>> varTypeToDomain) {
         // This groundMLN will contain only list of groundPredicates, not groundformulas since we are not grounding MLN.
         GroundMLN groundMLN = new GroundMLN();
-        List<GroundPredicate> groundPredicates = FullyGrindingMill.createGroundPredicates(mln, varTypeToDomain);
+        List<GroundPredicate> groundPredicates = FullyGrindingMill.createGroundPredicates(mln);
         groundMLN.groundPredicates = groundPredicates;
         groundMLN.setGroundPredToIntegerMap();
         return groundMLN;

@@ -334,7 +334,7 @@ public class GenLearner extends WeightLearner{
         };
         LBFGS.Params p = new LBFGS.Params();
             p.m = 5;
-            p.epsilon = 1.0E-5D;
+            p.epsilon = 30.9E-4D;
 //            p.past = 5;
 //            p.delta = 1.0E-7D;
 

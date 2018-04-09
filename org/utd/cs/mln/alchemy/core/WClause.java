@@ -280,12 +280,14 @@ public class WClause {
 	// Marginal Map
 	public String toString(){
 		String result="";
-		Atom tempAtom;
 		for (int i = 0; i < atoms.size(); i++) {
-			tempAtom=atoms.get(i);
-			result+=tempAtom.toString()+" | ";
+			if(sign.get(i))
+				result += "!";
+			result += atoms.get(i).toString();
+			if(i < atoms.size()-1)
+				result += " | ";
 		}
-		return result+":: "+this.weight;
+		return result;
 	}
 
 }

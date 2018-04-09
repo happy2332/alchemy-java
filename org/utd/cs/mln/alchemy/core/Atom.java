@@ -123,16 +123,14 @@ public class Atom {
 		return predPosition;	
 	}
 
-    // Marginal Map
     public String toString(){
-        String result="";
-        String predicateSymbolName=this.symbol.toString()+"(";
-        Term tempTerm;
+        String result = this.symbol.symbol+"(";
         for (int i = 0; i < terms.size(); i++) {
-            tempTerm=terms.get(i);
-            result+=tempTerm.toString()+", ";
+            result += terms.get(i);
+            if(i < terms.size()-1)
+            	result += ",";
         }
-        return result+") ";
+        return result+")";
     }
 	
 } // Class ends here
