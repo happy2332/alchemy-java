@@ -83,6 +83,7 @@ public class LearnTest {
                 //gl.addState(mln, groundMLN, truth);
                 continue;
             }
+            System.out.println("hello");
             System.out.println("Creating MRF...");
             long time = System.currentTimeMillis();
             GroundMLN groundMln = fgm.ground(mln);

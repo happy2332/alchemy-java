@@ -1,16 +1,12 @@
 package org.utd.cs.mln.inference;
 
-import com.sun.xml.internal.xsom.impl.WildcardImpl;
 import org.utd.cs.gm.core.LogDouble;
 import org.utd.cs.gm.utility.Timer;
 import org.utd.cs.mln.alchemy.core.*;
 import org.utd.cs.mln.alchemy.util.OtherUtils;
-import org.utd.cs.mln.learning.LearnTest;
-import sun.rmi.runtime.Log;
 
 import java.io.PrintWriter;
 import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Created by Happy on 3/2/17.
