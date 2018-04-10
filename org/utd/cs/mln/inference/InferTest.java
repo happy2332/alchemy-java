@@ -26,6 +26,10 @@ public class InferTest {
         FullyGrindingMill fgm = new FullyGrindingMill();
         MLN mln = new MLN();
         Parser parser = new Parser(mln);
+        List<String> files = new ArrayList<>();
+        files.add(iArgs.goldFile);
+        files.add(iArgs.evidFile);
+        parser.setTruthEvidFiles(files);
         parser.parseInputMLNFile(iArgs.mlnFile);
         Set<String> allPreds = new HashSet<String>();
         List<String> closedWorldPreds = new ArrayList<>();
@@ -41,10 +45,7 @@ public class InferTest {
         }
         closedWorldPreds.addAll(iArgs.evidPreds);
         closedWorldPreds.removeAll(iArgs.queryPreds);
-        List<String> files = new ArrayList<>();
-        files.add(iArgs.goldFile);
-        files.add(iArgs.evidFile);
-        parser.setTruthEvidFiles(files);
+
         boolean isgroundwithhypercube = true;
         GroundMLN groundMln = null;
         Evidence gold = null;
@@ -67,10 +68,11 @@ public class InferTest {
             }
             System.out.println("Creating MRF...");
             groundMln = fgm.groundWithHyperCubes(mln);
-            gold = parser.parseEvidence(groundMln, iArgs.goldFile);
             System.out.println("Total number of ground formula : " + groundMln.groundFormulas.size());
             System.out.println("Total permutation count : " + FullyGrindingMill.permutationCount);
+            System.out.println("Total number of ground predicates : " + groundMln.groundPredicates.size());
             System.out.println("Time taken to ground MLN : "+Timer.time((System.currentTimeMillis() - time) / 1000.0));
+            gold = parser.parseEvidence(groundMln, iArgs.goldFile);
         }
 
         else

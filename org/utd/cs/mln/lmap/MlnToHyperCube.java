@@ -358,9 +358,10 @@ public class MlnToHyperCube {
                     }
 
                     // Now set atom's hyperCube according to
-                    for(HyperCube hyperCube : predsHyperCubeHashMap.get(atom.symbol).get(rem)){
-                        atom.hyperCubes.add(new HyperCube(hyperCube));
-                    }
+                    setAtomHyperCubes(atom, predsHyperCubeHashMap.get(atom.symbol).get(rem));
+//                    for(HyperCube hyperCube : predsHyperCubeHashMap.get(atom.symbol).get(rem)){
+//                        atom.hyperCubes.add(new HyperCube(hyperCube));
+//                    }
                     // If there is no hyperCube for this atom, clause will be invalid
                     // This condition is redundant as we have already neglected those formulas in which
                     // empty hypercube atoms occur
@@ -537,6 +538,46 @@ public class MlnToHyperCube {
             }
         }
         return resultFormulas;
+    }
+
+    private void setAtomHyperCubes(Atom atom, ArrayList<HyperCube> hyperCubes) {
+        for(HyperCube hc : hyperCubes)
+        {
+            HyperCube newHc = new HyperCube();
+            List<Term> termsSeen = new ArrayList<>();
+            boolean isEmptyHyperCube = false;
+            for(int termIndex = 0 ; termIndex < atom.terms.size() ; termIndex++)
+            {
+                Term term = atom.terms.get(termIndex);
+                Set<Integer> termDomain = new HashSet<>(term.domain);
+                termDomain.retainAll(hc.varConstants.get(termIndex));
+                if(termDomain.isEmpty())
+                {
+                    isEmptyHyperCube = true;
+                    break;
+                }
+                int oldTermIndex = termsSeen.indexOf(term);
+                if(oldTermIndex == -1)
+                {
+                    termsSeen.add(term);
+                    newHc.varConstants.add(termDomain);
+                }
+                else
+                {
+                    newHc.varConstants.get(oldTermIndex).retainAll(termDomain);
+                    if(newHc.varConstants.get(oldTermIndex).isEmpty())
+                    {
+                        isEmptyHyperCube = true;
+                        break;
+                    }
+                }
+            }
+            if(!isEmptyHyperCube)
+            {
+                atom.hyperCubes.add(newHc);
+            }
+        }
+
     }
     /*public ArrayList<WClause> createClauseHyperCube(WClause clause, HashMap<PredicateSymbol,ArrayList<ArrayList<HyperCube>>> predsHyperCubeHashMap, boolean isNormal){
         // Create set of 3^(#atoms) clauses and in each clause, set each atom true, false or unknown, and then find
@@ -771,7 +812,7 @@ public class MlnToHyperCube {
                                      ArrayList<Integer> atom1CommonTermIndices,
                                      ArrayList<Integer> atom2CommonTermIndices, Atom finalAtom) {
 
-        // Set resulting terms : the order will be terms appearing only in atom1, then common terms, then terms
+        // Set resulting terms : the order will be terms appearing in atom1, then terms
         // appearing only in atom2
         for(int termId = 0 ; termId < atom1.terms.size() ; termId++){
             finalAtom.terms.add(atom1.terms.get(termId));

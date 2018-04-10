@@ -17,7 +17,7 @@ public class FullyGrindingMill {
     public static boolean fgmdebug = true;
     public static int permutationCount;
     private GroundMLN groundMln;
-    private Set<GroundFormula> groundFormulaSet = new HashSet<GroundFormula>();
+    private Map<GroundFormula,Integer> groundFormulaToIndexMap = new HashMap<GroundFormula,Integer>();
     private List<GroundPredicate> groundPredicatesList;
     private Map<GroundPredicate, Integer> groundPredicateIntegerMap;
 
@@ -316,8 +316,8 @@ public class FullyGrindingMill {
                     // this clause shouldn't be added, but still we shouldn't just break out of this loop, as we
                     // need to add groundPredicates, but we shouldn't add any clauseInfo into groundPredicates appearing
                     // in this clause.
-//                    if(gpBitSet.cardinality() == gp.numPossibleValues)
-//                        clauseToRemove = true;
+                    if(gpBitSet.cardinality() == gp.numPossibleValues)
+                        clauseToRemove = true;
                     gpIndexToSatVals.put(gpIndexInClause, gpBitSet);
 
                 }
@@ -347,9 +347,9 @@ public class FullyGrindingMill {
             {
                 newFormula.groundClauses.addAll(newGroundClauseList);
                 // check if this ground formula also exist
-                if(groundFormulaSet.contains(newFormula))
+                if(groundFormulaToIndexMap.containsKey(newFormula))
                 {
-                    int oldFormulaIndex = groundMln.groundFormulas.indexOf(newFormula);
+                    int oldFormulaIndex = groundFormulaToIndexMap.get(newFormula);
 
                     for(Integer gpIndex : newFormula.groundPredIndices)
                     {
@@ -364,8 +364,8 @@ public class FullyGrindingMill {
                 }
 
                 else {
+                    groundFormulaToIndexMap.put(newFormula, groundMln.groundFormulas.size());
                     groundMln.groundFormulas.add(newFormula);
-                    groundFormulaSet.add(newFormula);
                 }
             }
         }
@@ -939,6 +939,11 @@ public class FullyGrindingMill {
         return featureVectors;
     }
 
+    /**
+     * This function creates a list of {@link GroundPredicate}s from a given MLN
+     * @param mln Input MLN
+     * @return List of ground predicates
+     */
     public static List<GroundPredicate> createGroundPredicates(MLN mln) {
         List<GroundPredicate> groundPredsList = new ArrayList<GroundPredicate>();
         // For each pred symbol in MLN, create its groundings based on domain of its terms

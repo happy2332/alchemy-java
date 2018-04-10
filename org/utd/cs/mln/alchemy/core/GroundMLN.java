@@ -13,6 +13,11 @@ public class GroundMLN {
     public Map<GroundPredicate,Integer> groundPredToIntegerMap = new HashMap<>();
     public List<GroundFormula> groundFormulas = new ArrayList<>();
 
+    /**
+     * This function fills in {@link GroundMLN#groundPredToIntegerMap} which creates a mapping from groundpredicate to its index in {@link GroundMLN#groundPredicates} list.
+     * So if groundPredicates[i] = gp, then groundPredToIntegerMap[gp] = i.
+     * This is useful to search a groundpredicate gp in groundPredicates list.
+     */
     public void setGroundPredToIntegerMap()
     {
         for (int i = 0; i < groundPredicates.size(); i++) {

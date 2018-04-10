@@ -104,6 +104,9 @@ public class GenLearner extends WeightLearner{
         }
     }
 
+    /**
+     * Fills in {@link GenLearner#predToNumGndingsMap}
+     */
     private void createPredToNumGndingsMap() {
         for(int domainId = 0 ; domainId < domain_cnt ; domainId++)
         {
@@ -334,7 +337,7 @@ public class GenLearner extends WeightLearner{
         };
         LBFGS.Params p = new LBFGS.Params();
             p.m = 5;
-            p.epsilon = 30.9E-4D;
+            p.epsilon = 80.9E-2D;
 //            p.past = 5;
 //            p.delta = 1.0E-7D;
 
