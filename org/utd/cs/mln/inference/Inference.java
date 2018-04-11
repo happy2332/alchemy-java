@@ -22,7 +22,7 @@ public abstract class Inference {
     // Whether Save all counts for all samples or not i.e. whether fill allFormulaTrueCnts and oldAllFormulaTrueCnts
     boolean saveAllCounts;
 
-    State state;
+    public State state;
 
     int seed;
 

@@ -46,6 +46,7 @@ public abstract class WeightLearner {
         priorMeans = new double[numWts];
         priorStdDevs = new double[numWts];
         prior = new double[numWts];
+        Arrays.fill(prior,1.0);
         if(priorSoftEvidence)
             weights[numWts-1] = lArgs.seLambda;
         if(lArgs.usePrior)
@@ -54,6 +55,7 @@ public abstract class WeightLearner {
                 weights[i] = mlns.get(0).formulas.get(i).weight.getValue();
             }
         }
+        withEM = lArgs.withEM;
     }
 
     /**

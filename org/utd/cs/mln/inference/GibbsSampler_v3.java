@@ -250,8 +250,8 @@ public class GibbsSampler_v3 extends MCMC{
         if(assignment != prev_assignment)
         {
             updateSatCounts(chainIdx, gpId, assignment, prev_assignment);
-            updateWtsForGndPred(chainIdx,nextGpId);
         }
+        updateWtsForGndPred(chainIdx,nextGpId);
         return assignment;
     }
 

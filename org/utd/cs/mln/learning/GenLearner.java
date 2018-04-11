@@ -42,12 +42,31 @@ public class GenLearner extends WeightLearner{
     private double []gradient;
     private long time;
 
-
+    /**
+     * Constructor : Initializes fields
+     * @param mlns : List of MLNs of size number of databases. All MLNs are same except for domains for predicates
+     * @param groundMlns : List of groundMLNs of size number of databases.
+     * @param truths : For each database, Truth values of every ground predicate in corresponding groundMLN.
+     * @param lArgs : Learning Arguments
+     * @throws FileNotFoundException
+     */
     public GenLearner(List<MLN> mlns, List<GroundMLN> groundMlns, List<Evidence> truths, LearnArgs lArgs) throws FileNotFoundException {
         super(mlns, lArgs);
         init(groundMlns, truths, lArgs);
     }
 
+    /**
+     * Initializes fields :
+     * <ol>
+     *     <li>Create States according to GroundMLNs and truths</li>
+     *     <li>Fills in predToNumGndingsMap</li>
+     *     <li>Fills in satCounts</li>
+     * </ol>
+     * @param groundMlns
+     * @param truths
+     * @param lArgs
+     * @throws FileNotFoundException
+     */
     void init(List<GroundMLN> groundMlns, List<Evidence> truths, LearnArgs lArgs) throws FileNotFoundException {
         states = new ArrayList<>();
         satCounts = new ArrayList<>();
@@ -337,7 +356,7 @@ public class GenLearner extends WeightLearner{
         };
         LBFGS.Params p = new LBFGS.Params();
             p.m = 5;
-            p.epsilon = 80.9E-2D;
+            p.epsilon = 1.0E-6D;
 //            p.past = 5;
 //            p.delta = 1.0E-7D;
 
