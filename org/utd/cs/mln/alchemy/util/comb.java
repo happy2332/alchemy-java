@@ -24,11 +24,11 @@ public class comb {
 		// TODO Auto-generated method stub
 		System.out.println(findComb(10,5));
 		List<Integer> a = new ArrayList<>();
-		a.add(5);
-		Set<Integer> b = new HashSet<>(a);
-		b.clear();
-		System.out.println("b = " + b);
-
+		a.add(25);
+		a.add(50);
+		a.remove(1);
+		System.out.println("a = " + a);
+		MyAssert.assume(a.size() == 0);
 	}
 
 }

@@ -19,7 +19,7 @@ import java.util.Random;
 public abstract class Inference {
     private final int DEFAULT_SEED = 2350877;
 
-    // Whether Save all counts for all samples or not i.e. whether fill allFormulaTrueCnts and oldAllFormulaTrueCnts
+    // Whether to save all counts for all samples or not i.e. whether fill allFormulaTrueCnts and oldAllFormulaTrueCnts
     boolean saveAllCounts;
 
     public State state;
@@ -30,22 +30,22 @@ public abstract class Inference {
     boolean trackFormulaTrueCnts;
 
     // sum of true counts and true squared counts of first order formulas over all samples.
+    // If softEvidence, then size is +1
     double [] formulaTrueCnts, formulaTrueSqCnts;
-
-    List<Double> allLambdaTrueCnts, oldAllLambdaTrueCnts;
-
-    double lambdaTrueCnts, lambdaTrueSqCnts;
 
     // allFormulaTrueCnts[i][j] is the number of true groundings of jth formula in ith sample
     // oldAllFormulaTrueCnts[i][j] is the number of true groundings of jth formula in ith sample in the previous iter of learning
     List<List<Double>> allFormulaTrueCnts, oldAllFormulaTrueCnts;
 
-    // Number of samples taken of the true counts so far. This will be the size of
+    // Number of samples taken of the true counts so far.
     int numSamples;
     Random rand;
 
     //Indicates whether softEvidence is given or not
     boolean priorSoftEvidence;
+
+    // numWts is equal to number of first order formulas (+1 if softEvidence)
+    int numWts;
 
     /**
      * Constructor: Every inference algorithm is required to have a VariableState
@@ -67,14 +67,18 @@ public abstract class Inference {
         this.priorSoftEvidence = priorSoftEvidence;
         this.saveAllCounts = false;
         this.numSamples = 0;
-        this.rand = new Random();
+        this.rand = new Random(seed);
+        numWts = state.mln.formulas.size();
+        if(priorSoftEvidence)
+            numWts++;
 
         if(trackFormulaTrueCnts && state != null)
         {
-            int numFormulas = state.mln.formulas.size();
-            formulaTrueCnts = new double[numFormulas];
-            formulaTrueSqCnts = new double[numFormulas];
+            formulaTrueCnts = new double[numWts];
+            formulaTrueSqCnts = new double[numWts];
         }
+        allFormulaTrueCnts = new ArrayList<>();
+        oldAllFormulaTrueCnts = new ArrayList<>();
     }
 
     /**
@@ -98,11 +102,6 @@ public abstract class Inference {
      * @return resultant vector
      */
     public double[] getHessianVectorProduct(double[] v) {
-        int numFormulas = state.mln.formulas.size();
-        int numWts = numFormulas;
-        if (priorSoftEvidence)
-            numWts = numFormulas + 1;
-
         // For minimizing the negative log likelihood,
         // the ith element of H v is:
         //   E[n_i * vn] - E[n_i] E[vn]
@@ -119,46 +118,30 @@ public abstract class Inference {
         for (int s = 0; s < numSamples; s++)
         {
             List<Double> n1 = allFormulaTrueCnts.get(s);
-            double n2 = 0.0;
-            if(priorSoftEvidence)
-                n2 = allLambdaTrueCnts.get(s);
 
             // Compute v * n
             double vn = 0;
 
-            for (int i = 0; i < numFormulas; i++)
+            for (int i = 0; i < numWts; i++)
                 vn += v[i] * n1.get(i);
-
-            if(priorSoftEvidence)
-                vn += v[numFormulas] * n2;
 
             // Tally v*n, n_i, and n_i v*n
             sumVN += vn;
-            for (int i = 0; i < numFormulas; i++)
+            for (int i = 0; i < numWts; i++)
             {
                 sumN[i]    += n1.get(i);
                 sumNiVN[i] += n1.get(i) * vn;
-            }
-            if(priorSoftEvidence){
-                sumN[numFormulas] += n2;
-                sumNiVN[numFormulas] += n2 * vn;
             }
         }
 
         // Compute actual product from the sufficient stats
         double []product = new double[numWts];
-        for (int formulano = 0; formulano < numFormulas; formulano++)
+        for (int formulano = 0; formulano < numWts; formulano++)
         {
             double E_vn = sumVN/numSamples;
             double E_ni = sumN[formulano]/numSamples;
             double E_nivn = sumNiVN[formulano]/numSamples;
             product[formulano] = E_nivn - E_ni * E_vn;
-        }
-        if(priorSoftEvidence){
-            double E_vn = sumVN/numSamples;
-            double E_ni = sumN[numFormulas]/numSamples;
-            double E_nivn = sumNiVN[numFormulas]/numSamples;
-            product[numFormulas] = E_nivn - E_ni * E_vn;
         }
 
         return product;
@@ -169,20 +152,12 @@ public abstract class Inference {
      */
     public void resetCnts() {
         if(trackFormulaTrueCnts){
-            if(priorSoftEvidence)
-            {
-                lambdaTrueCnts = 0.0;
-                lambdaTrueSqCnts = 0.0;
-            }
-
             Arrays.fill(formulaTrueCnts,0.0);
             Arrays.fill(formulaTrueSqCnts,0.0);
             numSamples = 0;
             if(saveAllCounts)
             {
                 allFormulaTrueCnts = new ArrayList<List<Double>>();
-                if(priorSoftEvidence)
-                    allLambdaTrueCnts = new ArrayList<Double>();
             }
 
         }
@@ -208,13 +183,6 @@ public abstract class Inference {
                     formulaTrueCnts[j] += allFormulaTrueCnts.get(i).get(j);
                     formulaTrueSqCnts[j] += allFormulaTrueCnts.get(i).get(j) * allFormulaTrueCnts.get(i).get(j);
                 }
-                if(priorSoftEvidence)
-                {
-                    allLambdaTrueCnts.add(oldAllLambdaTrueCnts.get(i));
-                    lambdaTrueCnts += allLambdaTrueCnts.get(i);
-                    lambdaTrueSqCnts += allLambdaTrueCnts.get(i) * allLambdaTrueCnts.get(i);
-                }
-
                 numSamples++;
             }
         }
@@ -235,8 +203,6 @@ public abstract class Inference {
                 {
                     oldAllFormulaTrueCnts.get(i).set(j, allFormulaTrueCnts.get(i).get(j));
                 }
-                if(priorSoftEvidence)
-                    oldAllLambdaTrueCnts.set(i,allLambdaTrueCnts.get(i));
             }
         }
     }

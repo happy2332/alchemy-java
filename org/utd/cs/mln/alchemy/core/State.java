@@ -10,20 +10,21 @@ import java.util.*;
 public class State {
     public MLN mln;
     public GroundMLN groundMLN;
-    public List<Integer> truthVals = new ArrayList<>(); // For each groundPredicate in mln.groundPredicates, stores its truthval
+    public Map<Integer, Integer> truthVals = new HashMap<>(); // For each groundPredicate in mln.groundPredicates, stores its truthval
     public List<Set<Integer>> falseClausesSet = new ArrayList<>(); // for each groundformula, stores set of groundClauseIds which are false in this state
     public List<List<Integer>> numTrueLiterals = new ArrayList<>(); // for each groundformula, for each clauseId, stores numSatLiterals in that clause
-    public List<List<Double>> wtsPerPredPerVal = new ArrayList<>(); // For each GroundPred, stores sat wts for each value
+    public Map<Integer, List<Double>> wtsPerPredPerVal = new HashMap<>(); // For each GroundPred, stores sat wts for each value
     public ArrayList<Integer> groundedGfIndicesList = new ArrayList<>(); // Contains indices of those gfs in groundMLN, which were not present in first order mln, but directly added during code. Thses gfs have parentFormulaId as -1.
 
     public State(MLN mln, GroundMLN groundMLN) {
         this.mln = mln;
         this.groundMLN  = groundMLN;
-        int numGroundPreds = groundMLN.groundPredicates.size();
-        for(int i = 0 ; i < numGroundPreds ; i++)
+        //int numGroundPreds = groundMLN.groundPredicates.size();
+        for(GroundPredicate gp : groundMLN.groundPredToIntegerMap.keySet())
         {
-            truthVals.add(0);
-            wtsPerPredPerVal.add(new ArrayList<>(Collections.nCopies(groundMLN.groundPredicates.get(i).numPossibleValues,0.0)));
+            int gpId = groundMLN.groundPredToIntegerMap.get(gp);
+            truthVals.put(gpId, 0);
+            wtsPerPredPerVal.put(gpId, new ArrayList<>(Collections.nCopies(gp.numPossibleValues,0.0)));
         }
         int numGroundFormulas = groundMLN.groundFormulas.size();
         for(int i = 0 ; i < numGroundFormulas ; i++)
@@ -35,7 +36,7 @@ public class State {
             {
                 numTrueLiterals.get(i).add(0);
             }
-            if(groundMLN.groundFormulas.get(i).parentFormulaId.get(0) == -1)
+            if(groundMLN.groundFormulas.get(i).parentFormulaId.isEmpty())
                 groundedGfIndicesList.add(i);
         }
     }
@@ -44,18 +45,19 @@ public class State {
     {
         this.mln = mln;
         this.groundMLN  = groundMLN;
-        int numGroundPreds = groundMLN.groundPredicates.size();
-        for(int i = 0 ; i < numGroundPreds ; i++)
+        //int numGroundPreds = groundMLN.groundPredicates.size();
+        for(GroundPredicate gp : groundMLN.groundPredToIntegerMap.keySet())
         {
-            if(!truthVals.predIdVal.containsKey(i)) {
-                this.truthVals.add(0);
+            int gpId = groundMLN.groundPredToIntegerMap.get(gp);
+            if(!truthVals.predIdVal.containsKey(gpId)) {
+                this.truthVals.put(gpId, 0);
             }
             else
             {
-                this.truthVals.add(truthVals.predIdVal.get(i));
+                this.truthVals.put(gpId, truthVals.predIdVal.get(gpId));
             }
 
-            wtsPerPredPerVal.add(new ArrayList<>(Collections.nCopies(groundMLN.groundPredicates.get(i).numPossibleValues,0.0)));
+            wtsPerPredPerVal.put(gpId, new ArrayList<>(Collections.nCopies(gp.numPossibleValues,0.0)));
         }
         int numGroundFormulas = groundMLN.groundFormulas.size();
         for(int i = 0 ; i < numGroundFormulas ; i++)
@@ -67,7 +69,7 @@ public class State {
             {
                 numTrueLiterals.get(i).add(0);
             }
-            if(groundMLN.groundFormulas.get(i).parentFormulaId.get(0) == -1)
+            if(groundMLN.groundFormulas.get(i).parentFormulaId.isEmpty())
                 groundedGfIndicesList.add(i);
         }
     }
@@ -92,7 +94,7 @@ public class State {
 //    }
 
     public double[] getNumTrueGndings(int numWts) {
-        double []numTrueGndings = new double[numWts + 1];
+        double []numTrueGndings = new double[numWts];
         for(GroundFormula gf : groundMLN.groundFormulas)
         {
             boolean isFormulaSatisfied = true;
@@ -115,14 +117,14 @@ public class State {
             {
                 List<Integer> parentFormulaId = gf.parentFormulaId;
                 List<Integer> numCopies = gf.numCopies;
-                if(parentFormulaId.get(0) != -1) {
+                if(!parentFormulaId.isEmpty()) {
                     for (int i = 0; i < parentFormulaId.size(); i++) {
                         numTrueGndings[parentFormulaId.get(i)] += numCopies.get(i);
                     }
                 }
                 else
                 {
-                    numTrueGndings[numWts] += gf.originalWeight.getValue();
+                    numTrueGndings[numWts-1] += gf.originalWeight.getValue();
                 }
             }
         }
@@ -132,7 +134,7 @@ public class State {
     public void setTruthVals(Evidence truthVals) {
         for(int gpId : truthVals.predIdVal.keySet())
         {
-            this.truthVals.set(gpId, truthVals.predIdVal.get(gpId));
+            this.truthVals.put(gpId, truthVals.predIdVal.get(gpId));
         }
     }
 }

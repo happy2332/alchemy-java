@@ -2,10 +2,7 @@ package org.utd.cs.mln.alchemy.core;
 
 import org.utd.cs.gm.core.LogDouble;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Created by Happy on 2/21/17.
@@ -17,7 +14,7 @@ public class GroundFormula {
     public List<Integer> parentFormulaId = new ArrayList<Integer>(); // id of first order formula from which this came
     public List<Integer> numCopies = new ArrayList<Integer>(); // for each first order formula from which this groundformula is coming, it stores number of copies of it.
     public LogDouble weight;
-    public  LogDouble originalWeight;
+    public  LogDouble originalWeight; // weight without multiplication with softEvidenceLambda
 
     @Override
     public String toString() {
@@ -29,11 +26,11 @@ public class GroundFormula {
                 '}';
     }
 
-    public String writableString(List<GroundPredicate> groundPredicates){
+    public String writableString(Map<Integer, GroundPredicate> indexToGroundPredMap){
         String result = "";
         for (int gcId = 0; gcId < groundClauses.size(); gcId++) {
             GroundClause gc = groundClauses.get(gcId);
-            result += gc.writableString(groundPredicates);
+            result += gc.writableString(indexToGroundPredMap);
             if(gcId < groundClauses.size()-1)
                 result += " ^ ";
         }

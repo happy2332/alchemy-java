@@ -13,7 +13,7 @@ import java.util.*;
  * For a constant c, the size of a feature vector fvec is the number of first order formulas in which
  * c can occur.
  * fvec[fo] is the number of satisfied groundings of formula fo, when c occurs in fo.
- * To calculate features, this class requires an MLN file, a database, and variable type name (only this type's
+ * To calculate features, this class requires an MLN file, a database, output file name, and variable type name (only this type's
  * constants' features will be calculated)
  * @author Happy
  * @since 04/01/18
@@ -21,22 +21,26 @@ import java.util.*;
 public class FeatureCreator {
     public static void main(String []args) throws ParameterException, FileNotFoundException, PredicateNotFound {
         // args must be of length 3
-        if(args.length != 4)
+        if(args.length != 5)
             throw new ParameterException("Wrong arguments !!!");
         String mlnFile = args[0];
-        String dbFile = args[1];
+        String evidFile = args[1];
         String outFile = args[2];
         String typeName = args[3];
-        MLN mln = new MLN();
-        Parser parser = new Parser(mln);
-        parser.parseInputMLNFile(mlnFile);
+        boolean closedWorld = false;
+        if(args[4].equals("true"))
+            closedWorld = true;
+        else if(args[4].equals("false"))
+            closedWorld = false;
         List<String> files = new ArrayList<>();
-        files.add(dbFile);
-        parser.collectDomain(files);
-        mln.overWriteDomain();
-        boolean closedWorld = true;
-        GroundMLN groundMLN = createGroundMLN(mln, dbFile, mln.varTypeToDomainMap);
-        Evidence truth = parser.parseEvidence(groundMLN,dbFile);
+        files.add(evidFile);
+        MLN mln = new MLN(false);
+        Parser parser = new Parser(mln);
+        parser.setTruthEvidFiles(files);
+        parser.parseInputMLNFile(mlnFile);
+
+        GroundMLN groundMLN = createGroundMLN(mln);
+        Evidence truth = parser.parseEvidence(groundMLN,evidFile);
         Map<Integer, List<Integer>> features = createFeatures(mln, groundMLN, truth, typeName, mln.varTypeToDomainMap.get(typeName), closedWorld);
         writeFeatures(features, outFile);
     }
@@ -54,12 +58,20 @@ public class FeatureCreator {
         pw.close();
     }
 
-    private static GroundMLN createGroundMLN(MLN mln, String dbFile, Map<String, Set<Integer>> varTypeToDomain) {
+    private static GroundMLN createGroundMLN(MLN mln) {
         // This groundMLN will contain only list of groundPredicates, not groundformulas since we are not grounding MLN.
         GroundMLN groundMLN = new GroundMLN();
-        List<GroundPredicate> groundPredicates = FullyGrindingMill.createGroundPredicates(mln);
-        groundMLN.groundPredicates = groundPredicates;
-        groundMLN.setGroundPredToIntegerMap();
+        Map<GroundPredicate, Integer> groundPredicateIntegerMap = new HashMap<>();
+        List<String> queryPreds = new ArrayList<>();
+        for(PredicateSymbol ps : mln.symbols)
+        {
+            queryPreds.add(ps.symbol);
+        }
+        List<GroundPredicate> groundPredicates = FullyGrindingMill.createGroundPredicates(mln, groundPredicateIntegerMap, queryPreds);
+        for (int i = 0; i < groundPredicates.size(); i++) {
+            groundMLN.indexToGroundPredMap.put(i, groundPredicates.get(i));
+        }
+        groundMLN.groundPredToIntegerMap = groundPredicateIntegerMap;
         return groundMLN;
     }
 
@@ -185,7 +197,7 @@ public class FeatureCreator {
                 {
                     for (Integer gpIndex : gc.groundPredIndices)
                     {
-                        GroundPredicate gp = groundMLN.groundPredicates.get(gpIndex);
+                        GroundPredicate gp = groundMLN.indexToGroundPredMap.get(gpIndex);
                         for (int j = 0; j < gp.terms.size(); j++) {
                             if(gp.symbol.variable_types.get(j).equals(typeName))
                             {

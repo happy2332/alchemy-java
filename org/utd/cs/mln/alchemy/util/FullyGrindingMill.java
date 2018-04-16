@@ -18,17 +18,17 @@ public class FullyGrindingMill {
     public static int permutationCount;
     private GroundMLN groundMln;
     private Map<GroundFormula,Integer> groundFormulaToIndexMap = new HashMap<GroundFormula,Integer>();
-    private List<GroundPredicate> groundPredicatesList;
-    private Map<GroundPredicate, Integer> groundPredicateIntegerMap;
 
-    private void init() {
+    private void init(List<GroundPredicate> groundPredicateList, Map<GroundPredicate, Integer> groundPredicateIntegerMap) {
         groundMln = new GroundMLN();
-        groundPredicatesList = new ArrayList<>();
-        groundPredicateIntegerMap = new HashMap<>();
+        for (int i = 0; i < groundPredicateList.size(); i++) {
+            groundMln.indexToGroundPredMap.put(i, groundPredicateList.get(i));
+        }
+        groundMln.groundPredToIntegerMap = groundPredicateIntegerMap;
     }
 
-    public GroundMLN ground(MLN mln) {
-        init();
+    public GroundMLN ground(MLN mln, List<GroundPredicate> groundPredicateList, Map<GroundPredicate, Integer> groundPredicateIntegerMap) {
+        init(groundPredicateList, groundPredicateIntegerMap);
         int formulaNum = 1;
         for(Formula formula : mln.formulas)
         {
@@ -48,7 +48,6 @@ public class FullyGrindingMill {
             formulaNum++;
         }
 
-        groundMln.groundPredicates.addAll(groundPredicatesList);
         for(PredicateSymbol symbol : mln.symbols)
         {
             groundMln.symbols.add(new GroundPredicateSymbol(symbol.id, symbol.symbol, symbol.values, symbol.variable_types));
@@ -103,22 +102,10 @@ public class FullyGrindingMill {
                         gp.terms.add(permutations[i][termIndex]);
                     }
 
-                    // Check if this groundPredicate already exists, if it does not, then add it to groundPredicate List.
-                    // Note that it may happen that this clause gets removed later due to preprocessing, but still,
-                    // we need this groundPredicate, so there is no harm in adding it to groundPredicate List.
-                    int gpIndex = -1;
-                    if(groundPredicateIntegerMap.containsKey(gp))
-                    {
-                        gpIndex = groundPredicateIntegerMap.get(gp);
-                    }
-                    if(gpIndex == -1) {
-                        groundPredicatesList.add(gp);
-                        int numPossibleValues = oldAtom.symbol.values.values.size();
-                        gp.numPossibleValues = numPossibleValues;
-                        gpIndex = groundPredicatesList.size()-1;
-                        groundPredicateIntegerMap.put(gp, gpIndex);
-                    }
-                    gp = groundPredicatesList.get(gpIndex);
+                    // Find the index of this groundPredicate in groundPredicate List
+                    MyAssert.assume(groundMln.groundPredToIntegerMap.containsKey(gp));
+                    int gpIndex = groundMln.groundPredToIntegerMap.get(gp);
+                    gp = groundMln.indexToGroundPredMap.get(gpIndex);
 
                     // Check if this groundPredicate occurs first time in this ground clause. then update
                     // groundClause's data structures about this groundPredicate.
@@ -161,7 +148,7 @@ public class FullyGrindingMill {
                     newGroundClauseList.add(newGroundClause);
                     for(GroundPredicate gp : newGroundPreds)
                     {
-                        int gpIndex = groundPredicateIntegerMap.get(gp);
+                        int gpIndex = groundMln.groundPredToIntegerMap.get(gp);
                         newFormula.groundPredIndices.add(gpIndex);
                         if(!gp.groundFormulaIds.containsKey(currentFormulaId))
                         {
@@ -179,8 +166,8 @@ public class FullyGrindingMill {
         }
     }
 
-    public GroundMLN groundWithHyperCubes(MLN mln) {
-        init();
+    public GroundMLN groundWithHyperCubes(MLN mln, List<GroundPredicate> groundPredicateList, Map<GroundPredicate, Integer> groundPredicateIntegerMap) {
+        init(groundPredicateList, groundPredicateIntegerMap);
         int formulaNum = 1;
         for(Formula formula : mln.formulas)
         {
@@ -211,12 +198,11 @@ public class FullyGrindingMill {
             formulaNum++;
         }
 
-        groundMln.groundPredicates.addAll(groundPredicatesList);
         for(PredicateSymbol symbol : mln.symbols)
         {
             groundMln.symbols.add(new GroundPredicateSymbol(symbol.id, symbol.symbol, symbol.values, symbol.variable_types));
         }
-        groundMln.setGroundPredToIntegerMap();
+
         return groundMln;
     }
 
@@ -243,9 +229,10 @@ public class FullyGrindingMill {
             GroundFormula newFormula = new GroundFormula();
             int currentFormulaId = groundMln.groundFormulas.size();
             newFormula.formulaId = currentFormulaId;
-            newFormula.parentFormulaId.add(formula.formulaId);
+            MyAssert.assume(formula.parentFormulaId != -1);
+            newFormula.parentFormulaId.add(formula.parentFormulaId);
             newFormula.numCopies.add(numCopies);
-            newFormula.weight = new LogDouble(formula.weight.getValue(), true);
+            newFormula.weight = new LogDouble(numCopies * formula.weight.getValue(), true);
             List<GroundClause> newGroundClauseList = new ArrayList<GroundClause>();
             for(int c = 0 ; c < formula.clauses.size() ; c++)
             {
@@ -274,22 +261,11 @@ public class FullyGrindingMill {
                         gp.terms.add(permutations[i][termIndex]);
                     }
 
-                    // Check if this groundPredicate already exists, if it does not, then add it to groundPredicate List.
-                    // Note that it may happen that this clause gets removed later due to preprocessing, but still,
-                    // we need this groundPredicate, so there is no harm in adding it to groundPredicate List.
-                    int gpIndex = -1;
-                    if(groundPredicateIntegerMap.containsKey(gp))
-                    {
-                        gpIndex = groundPredicateIntegerMap.get(gp);
-                    }
-                    if(gpIndex == -1) {
-                        groundPredicatesList.add(gp);
-                        int numPossibleValues = oldAtom.symbol.values.values.size();
-                        gp.numPossibleValues = numPossibleValues;
-                        gpIndex = groundPredicatesList.size()-1;
-                        groundPredicateIntegerMap.put(gp, gpIndex);
-                    }
-                    gp = groundPredicatesList.get(gpIndex);
+                    // Find index of this gp in groundPredicateList
+                    MyAssert.assume(groundMln.groundPredToIntegerMap.containsKey(gp));
+                    int gpIndex = groundMln.groundPredToIntegerMap.get(gp);
+
+                    gp = groundMln.indexToGroundPredMap.get(gpIndex);
 
                     // Check if this groundPredicate occurs first time in this ground clause. then update
                     // groundClause's data structures about this groundPredicate.
@@ -333,7 +309,7 @@ public class FullyGrindingMill {
                     newGroundClauseList.add(newGroundClause);
                     for(GroundPredicate gp : newGroundPreds)
                     {
-                        int gpIndex = groundPredicateIntegerMap.get(gp);
+                        int gpIndex = groundMln.groundPredToIntegerMap.get(gp);
                         newFormula.groundPredIndices.add(gpIndex);
                         if(!gp.groundFormulaIds.containsKey(currentFormulaId))
                         {
@@ -353,7 +329,7 @@ public class FullyGrindingMill {
 
                     for(Integer gpIndex : newFormula.groundPredIndices)
                     {
-                        GroundPredicate gp = groundPredicatesList.get(gpIndex);
+                        GroundPredicate gp = groundMln.indexToGroundPredMap.get(gpIndex);
                         gp.groundFormulaIds.remove(currentFormulaId);
                     }
                     GroundFormula oldGroundFormula = groundMln.groundFormulas.get(oldFormulaIndex);
@@ -436,14 +412,15 @@ public class FullyGrindingMill {
 
     }
 
-    public GroundMLN handleEvidence(GroundMLN groundMln, Evidence evidence, Evidence truth, List<String> evidence_preds, List<String> query_preds, List<String> hidden_preds, boolean withEM, Map<GroundPredicate,Integer> newGpToIntegerMap, boolean queryEvidence) throws CloneNotSupportedException {
+    public GroundMLN handleEvidence(GroundMLN groundMln, Evidence evidence, Evidence truth, List<String> evidence_preds, List<String> query_preds, List<String> hidden_preds, boolean withEM, boolean queryEvidence) throws CloneNotSupportedException {
         GroundMLN newGroundMln = new GroundMLN();
+        newGroundMln.indexToGroundPredMap = groundMln.indexToGroundPredMap;
+        newGroundMln.groundPredToIntegerMap = groundMln.groundPredToIntegerMap;
         Map<Integer,Integer> newGpIndexToTrueVal = new HashMap<Integer,Integer>();                  //new truth.predIdVal
-        List<GroundPredicate> newGpList = new ArrayList<>();                                        //new groundMLN.groundPredicates
 
-        if(newGpToIntegerMap == null){
-            newGpToIntegerMap = new HashMap<GroundPredicate,Integer>();
-        }
+        for(GroundPredicate gp : groundMln.indexToGroundPredMap.values())
+            gp.groundFormulaIds.clear();
+        //new groundMLN.groundPredicates
 
 //        int formulaNum = 0;
 //        if(groundHiddenPredList != null){
@@ -475,7 +452,7 @@ public class FullyGrindingMill {
                 boolean clauseToRemove = false;
                 for(Integer gpIndex : gc.groundPredIndices)
                 {
-                    GroundPredicate gp = groundMln.groundPredicates.get(gpIndex);
+                    GroundPredicate gp = groundMln.indexToGroundPredMap.get(gpIndex);
                     BitSet b = gc.grounPredBitSet.get(gc.globalToLocalPredIndex.get(gpIndex));
 
                     // If gp is not in evidence and openworld
@@ -515,27 +492,19 @@ public class FullyGrindingMill {
                             newGp.terms.add(term);
                         }
 
-                        // Check if this groundPredicate already exists, if it does not, then add it to groundPredicate List.
-                        // Note that it may happen that this clause gets removed later due to preprocessing, but still,
-                        // we need this groundPredicate, so there is no harm in adding it to groundPredicate List.
-                        int newGpIndex = -1;
-                        if(newGpToIntegerMap.containsKey(newGp))
-                            newGpIndex = newGpToIntegerMap.get(newGp);
+                        //Find index of this gp in groundPredicates list
+                        MyAssert.assume(newGroundMln.groundPredToIntegerMap.containsKey(newGp));
+                        int newGpIndex = newGroundMln.groundPredToIntegerMap.get(newGp);
 
-                        if(newGpIndex == -1) {
-                            newGpList.add(newGp);
-                            newGp.numPossibleValues = gp.numPossibleValues;
-                            newGpIndex = newGpList.size()-1;
-                            newGpToIntegerMap.put(newGp,newGpIndex);
 
-                            if(!hidden_preds.contains(gp.symbol.symbol) && truth.predIdVal.containsKey(gpIndex))
-                            {
-                                int valTrue = truth.predIdVal.get(gpIndex);
-                                newGpIndexToTrueVal.put(newGpIndex, valTrue);
-                            }
+                        if(!hidden_preds.contains(gp.symbol.symbol) && truth.predIdVal.containsKey(gpIndex))
+                        {
+                            int valTrue = truth.predIdVal.get(gpIndex);
+                            newGpIndexToTrueVal.put(newGpIndex, valTrue);
                         }
 
-                        newGp = newGpList.get(newGpIndex);
+
+                        newGp = newGroundMln.indexToGroundPredMap.get(newGpIndex);
 
                         // Check if this groundPredicate occurs first time in this ground clause. then update
                         // groundClause's data structures about this groundPredicate.
@@ -588,7 +557,7 @@ public class FullyGrindingMill {
                         //clause add karna h
                         newGcList.add(newGc);
                         for (GroundPredicate gp : newGroundPreds) {
-                            int gpIndex = newGpToIntegerMap.get(gp);
+                            int gpIndex = groundMln.groundPredToIntegerMap.get(gp);
                             newGroundFormula.groundPredIndices.add(gpIndex);
                             if (!gp.groundFormulaIds.containsKey(currentFormulaId)) {
                                 gp.groundFormulaIds.put(currentFormulaId, new HashSet<Integer>());
@@ -615,16 +584,15 @@ public class FullyGrindingMill {
                 {
                     for(Integer gpId : gc.groundPredIndices)
                     {
-                        GroundPredicate gp = newGpList.get(gpId);
+                        GroundPredicate gp = groundMln.indexToGroundPredMap.get(gpId);
                         gp.groundFormulaIds.remove(currentFormulaId);
                     }
                 }
             }
 
         }
-        newGroundMln.groundPredicates.addAll(newGpList);
         Set<GroundPredicateSymbol> gpsSet = new HashSet<>();
-        for(GroundPredicate gp : newGpList)
+        for(GroundPredicate gp : groundMln.indexToGroundPredMap.values())
         {
             GroundPredicateSymbol gps = gp.symbol;
             gpsSet.add(new GroundPredicateSymbol(gps.id, gps.symbol, gps.values, gps.variable_types));
@@ -633,7 +601,6 @@ public class FullyGrindingMill {
         if(truth != null) {
             truth.predIdVal = newGpIndexToTrueVal;
         }
-        newGroundMln.setGroundPredToIntegerMap();
         return newGroundMln;
     }
 
@@ -826,7 +793,7 @@ public class FullyGrindingMill {
     // Softevidence file contains triplets : <constant,value,weight>. For example. : <0,1,0.4> means
     // there is a soft evidence clause st(0)=1 with weight 0.4.
     // lambda is the constant with which we multiply weight of softevidence.
-    // Since there is no corresponding first order formula for these ground formulas, their parentFormulaId is set to -1.
+    // Since there is no corresponding first order formula for these ground formulas, their parentFormulaId list is empty.
     public GroundMLN addSoftEvidence(GroundMLN newGroundMln, String softEvidenceFile, double lambda, String predName) throws FileNotFoundException {
         if (softEvidenceFile == null)
             return newGroundMln;
@@ -844,15 +811,14 @@ public class FullyGrindingMill {
             GroundFormula newFormula = new GroundFormula();
             int currentFormulaId = newGroundMln.groundFormulas.size();
             newFormula.formulaId = currentFormulaId;
-            newFormula.parentFormulaId.add(-1);
             newFormula.weight = new LogDouble(weight * lambda, true);
             newFormula.originalWeight = new LogDouble(weight, true);
             List<GroundClause> newGroundClauseList = new ArrayList<GroundClause>();
             GroundClause newGroundClause = new GroundClause();
             newGroundClause.formulaId = currentFormulaId;
             newGroundClause.weight = new LogDouble(weight * lambda, true);
-            for (int i = 0; i < newGroundMln.groundPredicates.size(); i++) {
-                GroundPredicate gp = newGroundMln.groundPredicates.get(i);
+            for (Integer i : newGroundMln.indexToGroundPredMap.keySet()) {
+                GroundPredicate gp = newGroundMln.indexToGroundPredMap.get(i);
                 if (gp.symbol.symbol.equals(predName)) {
                     if (gp.terms.get(0).equals(constant)) {
                         BitSet b = new BitSet(gp.numPossibleValues);
@@ -878,78 +844,80 @@ public class FullyGrindingMill {
     }
     // For each constant, size of feature vector is #firstorderformulas * #positions in each first order formula at which
     // that constant can come
-    public Map<Integer,List<Integer>> getFeatureVectors(GroundMLN groundMln, int numFormulas, Evidence truth, String typeName, Set<Integer> constants, boolean closedWorld) {
-        Map<Integer, List<Integer>> featureVectors = new HashMap<>();
-        for(int constant : constants)
-        {
-            featureVectors.put(constant, new ArrayList<Integer>(Collections.nCopies(numFormulas,0)));
-        }
-        for(GroundFormula gf : groundMln.groundFormulas)
-        {
-            boolean isFormulaSatisfied = true;
-            for(GroundClause gc : gf.groundClauses)
-            {
-                boolean isClauseSatisfied = false;
-                for(Integer gpIndex : gc.groundPredIndices)
-                {
-                    int truthVal = 0;
-                    if(truth.predIdVal.containsKey(gpIndex))
-                    {
-                        truthVal = truth.predIdVal.get(gpIndex);
-                    }
-                    else
-                    {
-                        if(!closedWorld)
-                            continue;
-                    }
-                    int localIndex = gc.globalToLocalPredIndex.get(gpIndex);
-                    isClauseSatisfied = gc.grounPredBitSet.get(localIndex).get(truthVal);
-                    if(isClauseSatisfied)
-                        break;
-                }
-                if(!isClauseSatisfied)
-                {
-                    isFormulaSatisfied = false;
-                    break;
-                }
-            }
-            // If formula is satisfied then update feature vector of each constant appearing in this formula
-            if(isFormulaSatisfied)
-            {
-                for (int i = 0; i < gf.parentFormulaId.size(); i++) {
-                    int pfId = gf.parentFormulaId.get(i);
-                    for (GroundClause gc : gf.groundClauses) {
-                        for (Integer gpIndex : gc.groundPredIndices) {
-                            GroundPredicate gp = groundMln.groundPredicates.get(gpIndex);
-                            for (int j = 0; j < gp.terms.size(); j++) {
-                                if(gp.symbol.variable_types.get(j).equals(typeName))
-                                {
-                                    int constant = gp.terms.get(j);
-                                    int numSatisfied = featureVectors.get(constant).get(pfId);
-                                    featureVectors.get(constant).set(pfId, numSatisfied+gf.numCopies.get(i));
-                                }
-                            }
-                        }
-
-                    }
-                }
-            }
-        }
-
-        return featureVectors;
-    }
+//    public Map<Integer,List<Integer>> getFeatureVectors(GroundMLN groundMln, int numFormulas, Evidence truth, String typeName, Set<Integer> constants, boolean closedWorld) {
+//        Map<Integer, List<Integer>> featureVectors = new HashMap<>();
+//        for(int constant : constants)
+//        {
+//            featureVectors.put(constant, new ArrayList<Integer>(Collections.nCopies(numFormulas,0)));
+//        }
+//        for(GroundFormula gf : groundMln.groundFormulas)
+//        {
+//            boolean isFormulaSatisfied = true;
+//            for(GroundClause gc : gf.groundClauses)
+//            {
+//                boolean isClauseSatisfied = false;
+//                for(Integer gpIndex : gc.groundPredIndices)
+//                {
+//                    int truthVal = 0;
+//                    if(truth.predIdVal.containsKey(gpIndex))
+//                    {
+//                        truthVal = truth.predIdVal.get(gpIndex);
+//                    }
+//                    else
+//                    {
+//                        if(!closedWorld)
+//                            continue;
+//                    }
+//                    int localIndex = gc.globalToLocalPredIndex.get(gpIndex);
+//                    isClauseSatisfied = gc.grounPredBitSet.get(localIndex).get(truthVal);
+//                    if(isClauseSatisfied)
+//                        break;
+//                }
+//                if(!isClauseSatisfied)
+//                {
+//                    isFormulaSatisfied = false;
+//                    break;
+//                }
+//            }
+//            // If formula is satisfied then update feature vector of each constant appearing in this formula
+//            if(isFormulaSatisfied)
+//            {
+//                for (int i = 0; i < gf.parentFormulaId.size(); i++) {
+//                    int pfId = gf.parentFormulaId.get(i);
+//                    for (GroundClause gc : gf.groundClauses) {
+//                        for (Integer gpIndex : gc.groundPredIndices) {
+//                            GroundPredicate gp = groundMln.groundPredicates.get(gpIndex);
+//                            for (int j = 0; j < gp.terms.size(); j++) {
+//                                if(gp.symbol.variable_types.get(j).equals(typeName))
+//                                {
+//                                    int constant = gp.terms.get(j);
+//                                    int numSatisfied = featureVectors.get(constant).get(pfId);
+//                                    featureVectors.get(constant).set(pfId, numSatisfied+gf.numCopies.get(i));
+//                                }
+//                            }
+//                        }
+//
+//                    }
+//                }
+//            }
+//        }
+//
+//        return featureVectors;
+//    }
 
     /**
      * This function creates a list of {@link GroundPredicate}s from a given MLN
      * @param mln Input MLN
      * @return List of ground predicates
      */
-    public static List<GroundPredicate> createGroundPredicates(MLN mln) {
+    public static List<GroundPredicate> createGroundPredicates(MLN mln, Map<GroundPredicate, Integer> groundPredToIntegerMap, List<String> queryPreds) {
         List<GroundPredicate> groundPredsList = new ArrayList<GroundPredicate>();
         // For each pred symbol in MLN, create its groundings based on domain of its terms
 
         for(PredicateSymbol ps : mln.symbols)
         {
+            if(!queryPreds.contains(ps.symbol))
+                continue;
             // Create set of domains for terms of this ps
             List<Set<Integer>> termDomains = new ArrayList<>();
             for(String varType : ps.variable_types)
@@ -963,10 +931,21 @@ public class FullyGrindingMill {
                 gp.symbol = new GroundPredicateSymbol(ps.id,ps.symbol,ps.values,ps.variable_types);
                 gp.numPossibleValues = gp.symbol.values.values.size();
                 gp.terms.addAll(perm);
+                groundPredToIntegerMap.put(gp, groundPredsList.size());
                 groundPredsList.add(gp);
             }
 
         }
         return groundPredsList;
+    }
+
+    public void removeEvidenceGroundPreds(GroundMLN groundMln, Evidence evidence) {
+        for(Integer gpId : evidence.predIdVal.keySet())
+        {
+            GroundPredicate gp = groundMln.indexToGroundPredMap.get(gpId);
+            MyAssert.assume(gp.groundFormulaIds.size() == 0);
+            groundMln.indexToGroundPredMap.remove(gpId);
+            groundMln.groundPredToIntegerMap.remove(gp);
+        }
     }
 }

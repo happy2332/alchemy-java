@@ -24,11 +24,11 @@ public class GibbsParams extends MCMCParams{
     }
 
     public GibbsParams() {
-        numChains       = 10;
+        numChains       = 5;
         burnMinSteps    = 100;
         burnMaxSteps    = 100;
         minSteps        = -1;
-        maxSteps        = 1000;
+        maxSteps        = 2000;
         maxSeconds      = -1;
         gamma           = 1 - 0.05;;
         epsilonError    = 0.01;

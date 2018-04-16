@@ -59,7 +59,7 @@ public class UnsoundLiftedMAP {
 		networkConstructionTime = time;
 		solverTime = 0;
 		
-		MLN mln = new MLN();
+		MLN mln = new MLN(false);
 		Parser parser = new Parser(mln);
 		parser.parseInputMLNFile(filename);
 

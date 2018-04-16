@@ -16,6 +16,7 @@ public class Formula {
 	public boolean isEvidence;
 	public LogDouble weight;
 	public int formulaId;
+	public int parentFormulaId = -1; // In case this is a formula of hyperCubeMLN, then store formulaId of first order formula from which it is generated.
 	public boolean tautology;
 
 	public Formula(List<WClause> clauses_, LogDouble weight_, boolean tautology) {

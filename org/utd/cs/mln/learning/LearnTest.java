@@ -52,7 +52,7 @@ public class LearnTest {
         List<String> closedWorldPreds = new ArrayList<>();
 
         for(int i = 0 ; i < numDb ; i++) {
-            MLN mln = new MLN();
+            MLN mln = new MLN(lArgs.priorSoftEvidence);
             mlns.add(mln);
             Parser parser = new Parser(mln);
             System.out.println("Reading DB file "+(i+1));
@@ -69,13 +69,17 @@ public class LearnTest {
             if(i == 0)
                 setQueryEvidPreds(mln, lArgs, closedWorldPreds);
 
+            Map<GroundPredicate, Integer> groundPredicateIntegerMap = new HashMap<>();
+            List<GroundPredicate> groundPredicates = fgm.createGroundPredicates(mln, groundPredicateIntegerMap, lArgs.queryPreds);
             if(lArgs.genLearn)
             {
                 // This groundMLN will contain only list of groundPredicates, not groundformulas since we are not grounding MLN.
                 GroundMLN groundMLN = new GroundMLN();
-                List<GroundPredicate> groundPredicates = fgm.createGroundPredicates(mln);
-                groundMLN.groundPredicates = groundPredicates;
-                groundMLN.setGroundPredToIntegerMap();
+
+                for (int gpId = 0; gpId< groundPredicates.size(); gpId++) {
+                    groundMLN.indexToGroundPredMap.put(gpId, groundPredicates.get(gpId));
+                }
+                groundMLN.groundPredToIntegerMap = groundPredicateIntegerMap;
                 groundMlns.add(groundMLN);
                 Evidence truth = parser.parseEvidence(groundMLN,lArgs.truthFiles.get(i));
                 truths.add(truth);
@@ -87,18 +91,16 @@ public class LearnTest {
             System.out.println("hello");
             System.out.println("Creating MRF...");
             long time = System.currentTimeMillis();
-            GroundMLN groundMln = fgm.ground(mln);
+            GroundMLN groundMln = fgm.ground(mln, groundPredicates, groundPredicateIntegerMap);
             System.out.println("Total number of ground formulas before handling evidence : " + groundMln.groundFormulas.size());
             Evidence evidence = parser.parseEvidence(groundMln,lArgs.evidenceFiles.get(i));
             Evidence truth = parser.parseEvidence(groundMln,lArgs.truthFiles.get(i));
             GroundMLN newGroundMln = null;
-
-            Map<GroundPredicate,Integer> gpToIntegerMap = new HashMap<>();
             if(lArgs.priorSoftEvidence) {
                 groundMln = fgm.addSoftEvidence(groundMln, lArgs.softEvidenceFiles.get(i), lArgs.seLambda, lArgs.sePred);
             }
             boolean withEM = false;
-            newGroundMln = fgm.handleEvidence(groundMln, evidence, truth, lArgs.evidPreds, lArgs.queryPreds, lArgs.hiddenPreds, lArgs.withEM, gpToIntegerMap, lArgs.queryEvidence);
+            newGroundMln = fgm.handleEvidence(groundMln, evidence, truth, lArgs.evidPreds, lArgs.queryPreds, lArgs.hiddenPreds, lArgs.withEM, lArgs.queryEvidence);
 //            newGroundMln = groundMln;
 
             if(lArgs.withEM){
@@ -107,35 +109,34 @@ public class LearnTest {
                 evidEmPreds.addAll(lArgs.evidPreds);
                 evidEmPreds.addAll(lArgs.queryPreds);
 //                Map<GroundPredicate,Integer> gpToIntegerMap = new HashMap<>();
-                Map<GroundPredicate,Integer> gpToIntegerMapEM = new HashMap<>();
-                GroundMLN EMNewGroundMln = fgm.handleEvidence(groundMln, Evidence.mergeEvidence(evidence,truth), null, evidEmPreds, null, lArgs.hiddenPreds, withEM, gpToIntegerMapEM, lArgs.queryEvidence);
+                GroundMLN EMNewGroundMln = fgm.handleEvidence(groundMln, Evidence.mergeEvidence(evidence,truth), null, evidEmPreds, null, lArgs.hiddenPreds, withEM, lArgs.queryEvidence);
 //                newGroundMln = fgm.handleEvidence(groundMln, evidence, truth, evidPreds, queryPreds, hiddenPreds, false, gpToIntegerMap);
-                subtypeMaps[i] = mapPredIdEmToNormal(gpToIntegerMap, gpToIntegerMapEM, lArgs.hiddenPreds);
+                subtypeMaps[i] = mapPredIdEmToNormal(newGroundMln.groundPredToIntegerMap, EMNewGroundMln.groundPredToIntegerMap, lArgs.hiddenPreds);
 
-                GibbsSampler_v2 gsEM = new GibbsSampler_v2(mln, EMNewGroundMln, truth, 20, lArgs.numEMSamples, false, false, lArgs.priorSoftEvidence, true);
-                inferencesEM.add(gsEM);
+                //GibbsSampler_v2 gsEM = new GibbsSampler_v2(mln, EMNewGroundMln, truth, 20, lArgs.numEMSamples, false, false, lArgs.priorSoftEvidence, true);
+                //inferencesEM.add(gsEM);
             }
 
-            GibbsSampler_v2 gs = new GibbsSampler_v2(mln, newGroundMln, truth, 100, lArgs.gibbsParam.samplesPerTest, true, false, lArgs.priorSoftEvidence, false);
-            inferences.add(gs);
+            //GibbsSampler_v2 gs = new GibbsSampler_v2(mln, newGroundMln, truth, 100, lArgs.gibbsParam.samplesPerTest, true, false, lArgs.priorSoftEvidence, false);
+            //inferences.add(gs);
 
             System.out.println("Time taken to create MRF : " + Timer.time((System.currentTimeMillis() - time)/1000.0));
             System.out.println("Total number of ground formulas : " + newGroundMln.groundFormulas.size());
-            System.out.println("Total number of ground preds : " + newGroundMln.groundPredicates.size());
+            System.out.println("Total number of ground preds : " + newGroundMln.indexToGroundPredMap.size());
         }
 
         WeightLearner wl = null;
         if(lArgs.genLearn)
         {
-            wl = new GenLearner(mlns, groundMlns, truths, lArgs);
+            wl = new GenLearner(mlns, groundMlns, null, truths, null, lArgs);
             wl.learnWeights();
         }
         else
         {
             // Start learning
-            DiscLearner dl = new DiscLearner(inferences, inferencesEM, subtypeMaps, lArgs.numIter, 100.0, lArgs.minllChange, Double.MAX_VALUE, lArgs.withEM, true, lArgs.usePrior, lArgs.priorSoftEvidence, lArgs.seLambda, Method.CG);
-
-            dl.learnWeights();
+//            DiscLearner dl = new DiscLearner(inferences, inferencesEM, subtypeMaps, lArgs.numIter, 100.0, lArgs.dMinllChange, Double.MAX_VALUE, lArgs.withEM, true, lArgs.useMlnWts, lArgs.priorSoftEvidence, lArgs.seLambda, Method.CG);
+//
+//            dl.learnWeights();
         }
         wl.writeWeights(lArgs.mlnFile, lArgs.outFile);
         System.out.println("Learning done !!!");

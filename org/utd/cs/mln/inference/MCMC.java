@@ -29,7 +29,7 @@ public abstract class MCMC extends Inference {
     boolean mcmcdebug = true;
 
     // Truth values in each chain for each ground predicate (truthValues[c][p])
-    int truthValues [][];
+    Map<Integer, Integer> truthValues [];
 
     // Num. of satisfying literals in each chain for each ground formula for each ground clause
     // numSatLiterals[chain][formula][clause]
@@ -39,12 +39,13 @@ public abstract class MCMC extends Inference {
     // falseClausesSet[chain][formula][
     List<List<Set<Integer>>> falseClausesSet;
 
-    // Holds number of times a ground predicate is set to a value
-    // numValPerPred[g][val]
-    List<List<List<Double>>> numValPerChainPerPred_;
+    // For each chain, Holds number of times a ground predicate is set to a value
+    // numValPerPred[c][g][val]
+    List<Map<Integer, List<Double>>> numValPerChainPerPred_;
 
     // For each chain, for each ground predicate, for each possible value, stores satweight
-    List<List<List<Double>>> wtsPerPredPerVal;
+    // wtsPerPredVal[c][g][val]
+    List<Map<Integer, List<Double>>> wtsPerPredPerVal;
 
     /**
      * Constructor: User-set parameters are set.
@@ -64,24 +65,25 @@ public abstract class MCMC extends Inference {
      * Allocates memory to all truthValues, numSatLiterals, falseClauseSet and wtsPerPredPerVal
      */
     void initTruthValsAndSatTrueLits() {
-        truthValues = new int[numChains][state.groundMLN.groundPredicates.size()];
+        truthValues = new Map[numChains];
         numSatLiterals = new ArrayList<>();
         wtsPerPredPerVal = new ArrayList<>();
         falseClausesSet = new ArrayList<>();
         int numFormulas = state.groundMLN.groundFormulas.size();
-        int numGndPreds = state.groundMLN.groundPredicates.size();
         for (int c = 0; c < numChains; c++) {
             numSatLiterals.add(new ArrayList<List<Integer>>());
-            wtsPerPredPerVal.add(new ArrayList<List<Double>>());
+            wtsPerPredPerVal.add(new HashMap<Integer, List<Double>>());
             falseClausesSet.add(new ArrayList<Set<Integer>>());
             for (int formulaId = 0; formulaId < numFormulas; formulaId++) {
                 int numClauses = state.groundMLN.groundFormulas.get(formulaId).groundClauses.size();
                 numSatLiterals.get(c).add(new ArrayList<>(Collections.nCopies(numClauses,0)));
                 falseClausesSet.get(c).add(new HashSet<Integer>());
             }
-            for (int g = 0; g < numGndPreds; g++) {
-                GroundPredicate gp = state.groundMLN.groundPredicates.get(g);
-                wtsPerPredPerVal.get(c).add(new ArrayList<Double>(Collections.nCopies(gp.numPossibleValues,0.0)));
+            truthValues[c] = new HashMap<>();
+            for (GroundPredicate gp : state.groundMLN.groundPredToIntegerMap.keySet()) {
+                int gpId = state.groundMLN.groundPredToIntegerMap.get(gp);
+                truthValues[c].put(gpId, 0);
+                wtsPerPredPerVal.get(c).put(gpId, new ArrayList<Double>(Collections.nCopies(gp.numPossibleValues,0.0)));
             }
         }
     }
@@ -91,13 +93,12 @@ public abstract class MCMC extends Inference {
      */
     void randomInitializeTruthVals() {
         for (int c = 0; c < numChains; c++) {
-            List<GroundPredicate> gpList = state.groundMLN.groundPredicates;
-            int numGps = gpList.size();
-            for(int g = 0 ; g < numGps ; g++)
+            for(GroundPredicate gp : state.groundMLN.groundPredToIntegerMap.keySet())
             {
-                int numPossibleVals = gpList.get(g).numPossibleValues;
+                int numPossibleVals = gp.numPossibleValues;
                 int assignment = getUniformAssignment(numPossibleVals);
-                truthValues[c][g] = assignment;
+                int gpId = state.groundMLN.groundPredToIntegerMap.get(gp);
+                truthValues[c].put(gpId,assignment);
             }
         }
     }
@@ -126,7 +127,7 @@ public abstract class MCMC extends Inference {
                     int numSatLiteralsLocal = 0;
                     for(int k = 0 ; k < numPreds ; k++) {
                         int globalPredIndex = gc.groundPredIndices.get(k);
-                        int currentAssignment = truthValues[c][globalPredIndex];
+                        int currentAssignment = truthValues[c].get(globalPredIndex);
                         if (gc.grounPredBitSet.get(k).get(currentAssignment)) {
                             numSatLiteralsLocal++;
                         }
@@ -150,21 +151,20 @@ public abstract class MCMC extends Inference {
     {
         numValPerChainPerPred_ = new ArrayList<>();
         for (int chainIdx = 0; chainIdx < numChains; chainIdx++) {
-            numValPerChainPerPred_.add(new ArrayList<List<Double>>());
-            int numGndPreds = state.groundMLN.groundPredicates.size();
-            for (int g = 0; g < numGndPreds; g++) {
-                GroundPredicate gp = state.groundMLN.groundPredicates.get(g);
+            numValPerChainPerPred_.add(new HashMap<Integer, List<Double>>());
+            for (GroundPredicate gp : state.groundMLN.groundPredToIntegerMap.keySet()) {
                 int numPossibleVals = gp.numPossibleValues;
-                numValPerChainPerPred_.get(chainIdx).add(new ArrayList<>(Collections.nCopies(numPossibleVals,0.0)));
+                int gpId = state.groundMLN.groundPredToIntegerMap.get(gp);
+                numValPerChainPerPred_.get(chainIdx).put(gpId, new ArrayList<>(Collections.nCopies(numPossibleVals,0.0)));
             }
         }
 
     }
 
     public void updateWtsForGndPreds(List<Integer> affectedGndPredIndices, int chainIndex) {
-        List<GroundPredicate> groundPredicates = state.groundMLN.groundPredicates;
+        Map<Integer, GroundPredicate> indexToGroundPredMap = state.groundMLN.indexToGroundPredMap;
         for (Integer i : affectedGndPredIndices) {
-            GroundPredicate gp = groundPredicates.get(i);
+            GroundPredicate gp = indexToGroundPredMap.get(i);
             int numPossibleVals = gp.numPossibleValues;
             double wtsPerVal[] = new double[numPossibleVals];
             Map<Integer, Set<Integer>> formulaIds = gp.groundFormulaIds;
@@ -178,7 +178,7 @@ public abstract class MCMC extends Inference {
                 BitSet formulaBitSet = new BitSet(numPossibleVals);
                 formulaBitSet.flip(0, numPossibleVals);
 
-                // If there is a clause which is false, and not doesn't contain gp, then this formula is always false
+                // If there is a clause which is false, and doesn't contain gp, then this formula is always false
                 if (tempSet.size() == 0) {
                     for (Integer cid : formulaIds.get(formulaId)) {
                         BitSet clauseBitSet = new BitSet(numPossibleVals);
@@ -189,7 +189,7 @@ public abstract class MCMC extends Inference {
                             clauseBitSet.flip(0, numPossibleVals);
                         else if (numSatLiteralsLocal == 1) {
                             BitSet b = gc.grounPredBitSet.get(localPredIndex);
-                            if (b.get(truthValues[chainIndex][i])) {
+                            if (b.get(truthValues[chainIndex].get(i))) {
                                 clauseBitSet = (BitSet) b.clone();
                             } else {
                                 clauseBitSet.flip(0, numPossibleVals);
@@ -217,7 +217,7 @@ public abstract class MCMC extends Inference {
             for (double d : wtsPerVal) {
                 tempWts.add(d);
             }
-            wtsPerPredPerVal.get(chainIndex).set(i, tempWts);
+            wtsPerPredPerVal.get(chainIndex).put(i, tempWts);
         }
     }
 
@@ -242,7 +242,7 @@ public abstract class MCMC extends Inference {
     }
 
     void updateSatCounts(int chainIdx, int gpId, int assignment, int prev_assignment) {
-        GroundPredicate gp = state.groundMLN.groundPredicates.get(gpId);
+        GroundPredicate gp = state.groundMLN.indexToGroundPredMap.get(gpId);
         for(int formulaId : gp.groundFormulaIds.keySet())
         {
             for(int cid : gp.groundFormulaIds.get(formulaId))
@@ -270,9 +270,7 @@ public abstract class MCMC extends Inference {
     }
 
     public void updateWtsForGndPred(int chainIdx, int gpId) {
-
-        List<GroundPredicate> groundPredicates = state.groundMLN.groundPredicates;
-        GroundPredicate gp = groundPredicates.get(gpId);
+        GroundPredicate gp = state.groundMLN.indexToGroundPredMap.get(gpId);
         int numPossibleVals = gp.numPossibleValues;
         double wtsPerVal[] = new double[numPossibleVals];
         Map<Integer, Set<Integer>> formulaIds = gp.groundFormulaIds;
@@ -306,7 +304,7 @@ public abstract class MCMC extends Inference {
                     else if(numSatLiteralsLocal == 1)
                     {
                         BitSet b = gc.grounPredBitSet.get(localPredIndex);
-                        if(b.get(truthValues[chainIdx][gpId]))
+                        if(b.get(truthValues[chainIdx].get(gpId)))
                         {
                             clauseBitSet = (BitSet) b.clone();
                         }
@@ -340,9 +338,13 @@ public abstract class MCMC extends Inference {
         {
             tempWts.add(d);
         }
-        wtsPerPredPerVal.get(chainIdx).set(gpId, tempWts);
+        wtsPerPredPerVal.get(chainIdx).put(gpId, tempWts);
     }
 
+    /**
+     * Update trueCounts such as formulaTrueCnts, formulaTrueSqCnts, and allFormulaTrueCnts for this chain
+     * @param chainIdx Chain for which this updation needs to be done.
+     */
     void updateTrueCnts(int chainIdx)
     {
         int numCounts = formulaTrueCnts.length;
@@ -350,8 +352,6 @@ public abstract class MCMC extends Inference {
         if(saveAllCounts)
         {
             allFormulaTrueCnts.add(new ArrayList<Double>(Collections.nCopies(numCounts,0.0)));
-            if(priorSoftEvidence)
-                allLambdaTrueCnts.add(0.0);
         }
         for (int i = 0; i < numCounts; i++) {
             if(saveAllCounts)
@@ -361,18 +361,11 @@ public abstract class MCMC extends Inference {
             formulaTrueCnts[i] += numTrueGndings[i];
             formulaTrueSqCnts[i] += numTrueGndings[i]*numTrueGndings[i];
         }
-        if(priorSoftEvidence) {
-            allLambdaTrueCnts.set(numSamples, numTrueGndings[numTrueGndings.length - 1]);
-            lambdaTrueCnts += numTrueGndings[numTrueGndings.length-1];
-        }
         numSamples++;
     }
 
-    private double[] getNumTrueGndingsFromTruthVals(int[] truthValues)
+    private double[] getNumTrueGndingsFromTruthVals(Map<Integer, Integer> truthValues)
     {
-        int numWts = state.mln.formulas.size();
-        if(priorSoftEvidence)
-            numWts++;
         double numTrueGndings[] = new double[numWts];
         for(GroundFormula gf : state.groundMLN.groundFormulas)
         {
@@ -383,7 +376,7 @@ public abstract class MCMC extends Inference {
                 for(Integer gpId : gc.groundPredIndices)
                 {
                     BitSet b = gc.grounPredBitSet.get(gc.globalToLocalPredIndex.get(gpId));
-                    int trueVal = truthValues[gpId];
+                    int trueVal = truthValues.get(gpId);
                     isClauseSatisfied |= b.get(trueVal);
                     if(isClauseSatisfied)
                         break;
@@ -396,7 +389,7 @@ public abstract class MCMC extends Inference {
             {
                 List<Integer> parentFormulaId = gf.parentFormulaId;
                 List<Integer> numCopies = gf.numCopies;
-                if(parentFormulaId.get(0) != -1) {
+                if(!parentFormulaId.isEmpty()) {
                     for (int i = 0; i < parentFormulaId.size(); i++) {
                         numTrueGndings[parentFormulaId.get(i)] += numCopies.get(i);
                     }
@@ -412,10 +405,9 @@ public abstract class MCMC extends Inference {
 
     public void writeProbs(PrintWriter writer)
     {
-        int numGroundPreds = state.groundMLN.groundPredicates.size();
-        for(int g = 0 ; g < numGroundPreds ; g++)
+        for(Integer g : state.groundMLN.indexToGroundPredMap.keySet())
         {
-            int numVals = state.groundMLN.groundPredicates.get(g).numPossibleValues;
+            int numVals = state.groundMLN.indexToGroundPredMap.get(g).numPossibleValues;
             for(int val = 0 ; val < numVals ; val++)
             {
                 double marginal = 0.0;
@@ -423,7 +415,7 @@ public abstract class MCMC extends Inference {
                     marginal += numValPerChainPerPred_.get(c).get(g).get(val);
                 }
                 double marginal_prob = marginal/numChains;
-                writer.printf(state.groundMLN.groundPredicates.get(g) + "=" + val + " %.4f\n",marginal_prob);
+                writer.printf(state.groundMLN.indexToGroundPredMap.get(g) + "=" + val + " %.4f\n",marginal_prob);
             }
         }
     }

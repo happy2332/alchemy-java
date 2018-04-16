@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Random;
 
 import org.utd.cs.mln.alchemy.core.PredicateSymbol;
+import org.utd.cs.mln.alchemy.util.MyAssert;
 
 public class PossibleWorld implements Cloneable{
 	
@@ -78,7 +79,7 @@ public class PossibleWorld implements Cloneable{
 	}
 
 	public void setNoOfTrueGrounding(PredicateSymbol symbol, int noOfTrueGrounding) {
-		assert(noOfTrueGrounding >= 0 && noOfTrueGrounding <= numberOfGroundings.get(symbol.id));
+		MyAssert.assume(noOfTrueGrounding >= 0 && noOfTrueGrounding <= numberOfGroundings.get(symbol.id));
 		assignments.set(symbol.id, noOfTrueGrounding);
 	}
 	

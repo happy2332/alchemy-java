@@ -63,10 +63,10 @@ public class GroundClause {
                 '}';
     }
 
-    public String writableString(List<GroundPredicate> groundPredicates) {
+    public String writableString(Map<Integer, GroundPredicate> indexToGroundPredMap) {
         String result = "";
         for (int gpId = 0; gpId < groundPredIndices.size(); gpId++) {
-            GroundPredicate gp = groundPredicates.get(groundPredIndices.get(gpId));
+            GroundPredicate gp = indexToGroundPredMap.get(groundPredIndices.get(gpId));
             result += gp.writableString();
             if(gpId < groundPredIndices.size() - 1)
                 result += " | ";

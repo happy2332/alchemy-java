@@ -20,6 +20,8 @@ public class MLN {
 	public Map<String, Set<Integer>> varTypeToDomainMap = new HashMap<>();
 	public List<WClause> clauses = new ArrayList<WClause>();
 	public List<Formula> formulas = new ArrayList<Formula>();
+	public double softEvidenceLambda = 0.0;
+	public boolean priorSoftEvidence = false;
 	public double numSubNetworks = 1;
 
 //	public MLN(MLN mln){
@@ -29,6 +31,18 @@ public class MLN {
 //		}
 //	}
 
+//	public MLN() {
+//
+//		max_predicate_id = (0);
+//		maxDegree = (-1);
+//	}
+
+	public MLN(boolean priorSoftEvidence)
+	{
+		this.priorSoftEvidence = priorSoftEvidence;
+		max_predicate_id = 0;
+		maxDegree = -1;
+	}
 	public static Formula create_new_formula(Formula formula)
 	{
 		// root's hypercubes are not added here, user has to manually copy.
@@ -392,30 +406,35 @@ public class MLN {
 		return maxDegree;
 	}
 
-	public MLN() {
-
-		max_predicate_id = (0);
-		maxDegree = (-1);
+	public MLN copyMLNWithoutformulas() {
+		MLN mln = new MLN(this.priorSoftEvidence);
+		mln.softEvidenceLambda = this.softEvidenceLambda;
+		mln.varTypeToDomainMap = this.varTypeToDomainMap;
+		mln.maxDegree = this.maxDegree;
+		mln.max_predicate_id = this.max_predicate_id;
+		mln.predicateDomainMap = this.predicateDomainMap;
+		return mln;
 	}
 
-	public void overWriteDomain() {
-		for(Formula formula : formulas)
-		{
-			for(WClause clause : formula.clauses)
-			{
-				for(Atom atom : clause.atoms)
-				{
-					for(Term term : atom.terms)
-					{
-						Set<Integer> domain = varTypeToDomainMap.get(term.type);
-						term.domain.clear();
-						term.domain.addAll(domain);
-					}
-				}
-			}
-		}
 
-	}
+//	public void overWriteDomain() {
+//		for(Formula formula : formulas)
+//		{
+//			for(WClause clause : formula.clauses)
+//			{
+//				for(Atom atom : clause.atoms)
+//				{
+//					for(Term term : atom.terms)
+//					{
+//						Set<Integer> domain = varTypeToDomainMap.get(term.type);
+//						term.domain.clear();
+//						term.domain.addAll(domain);
+//					}
+//				}
+//			}
+//		}
+//
+//	}
 
 
 	/*

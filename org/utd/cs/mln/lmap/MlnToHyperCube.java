@@ -534,6 +534,7 @@ public class MlnToHyperCube {
             //newFormula.root.hyperCubesList = chcb.mergeHyperCubes(newFormula.root.hyperCubesList);
 
             if(newFormula.root.hyperCubesList.size() > 0){
+                newFormula.parentFormulaId = formula.formulaId;
                 resultFormulas.add(newFormula);
             }
         }
@@ -1068,7 +1069,7 @@ public class MlnToHyperCube {
 
     public static void main(String[] args) throws FileNotFoundException, PredicateNotFound {
         // TODO Auto-generated method stub
-        MLN mln = new MLN();
+        MLN mln = new MLN(false);
         Parser parser = new Parser(mln);
         String filename = new String("smoke/smoke_mln_29.txt");
         //String filename = new String("entity_resolution/er-bnct-eclipse.mln");

@@ -60,8 +60,8 @@ public class BaseSolver {
 		System.out.println("predId = " + predId);
 		System.out.println("groundAtom : " + ground_atom);
 		ArrayList<MLN> resultMLNs = new ArrayList<MLN>();
-		resultMLNs.add(new MLN());
-		resultMLNs.add(new MLN());
+		resultMLNs.add(new MLN(false));
+		resultMLNs.add(new MLN(false));
 		//double []satisfiedClauseWts = new double[]{0.0,0.0};
 		for(WClause clause : mln.clauses){
 			boolean predIdFound = false;
@@ -253,8 +253,8 @@ public class BaseSolver {
 		System.out.println("predId = " + predId);
 		System.out.println("groundAtom : " + ground_atom);
 		ArrayList<MLN> resultMLNs = new ArrayList<MLN>();
-		resultMLNs.add(new MLN());
-		resultMLNs.add(new MLN());
+		resultMLNs.add(new MLN(false));
+		resultMLNs.add(new MLN(false));
 		//double []satisfiedClauseWts = new double[]{0.0,0.0};
 		for(WClause clause : mln.clauses){
 			boolean predIdFound = false;

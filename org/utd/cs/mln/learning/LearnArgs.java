@@ -34,8 +34,6 @@ public class LearnArgs {
     public List<String> evidenceFiles;
     @Parameter(names="-g", description = "If specified, do generative learning", order = 4)
     public boolean genLearn = false;
-    @Parameter(names="-d", description = "If specified, do discriminative learning", order = 5)
-    public boolean discLearn = true;
     @Parameter(names="-ep", description = "Comma separated evidence predicates (default : all except query and hidden predicates", order = 6)
     public List<String> evidPreds;
     @Parameter(names="-qp", description = "Comma separated query predicates", order = 7)
@@ -56,12 +54,18 @@ public class LearnArgs {
     public int numEMSamples = 10;
     @Parameter(names="-queryEvidence", description = "If specified, make all query ground predicates not specified in training file as evidence)", order = 15)
     public boolean queryEvidence;
-    @Parameter(names="-usePrior", description = "If specified, initialize weights with MLN weights", order = 16)
-    public boolean usePrior;
-    @Parameter(names="-numIter", description = "Number of learning iterations in dicriminative learning", order = 17)
-    public int numIter = 100;
-    @Parameter(names="-minllChange", description = "convergence criteria for discriminative learning", order = 17)
-    public double minllChange = 0.001;
+    @Parameter(names="-useMlnWts", description = "If specified, initialize weights with MLN weights", order = 16)
+    public boolean useMlnWts;
+    @Parameter(names="-dMinllChange", description = "convergence criteria for discriminative learning", order = 17)
+    public double dMinllChange = 0.001;
+    @Parameter(names="-dNumIter", description = "Max Number of learning iterations for discriminative learning", order = 18)
+    public int dNumIter = 100;
+    @Parameter(names="-method", description = "Method Name (cg/lbfgs)", order = 19)
+    public String method = "cg";
+    @Parameter(names="-pll", description = "If specified, use neg pseudo log likelihood as loss function", order = 20)
+    public boolean pll = false;
+    @Parameter(names="-debug", description = "If specified, prints weights and gradient at every iteration", order = 19)
+    public boolean debug;
     /**
      * @see GibbsParamConverter
      */
@@ -80,7 +84,6 @@ public class LearnArgs {
                 "-t = " + truthFiles + "\n"+
                 "-e = " + evidenceFiles + "\n"+
                 "-g = " + genLearn + "\n"+
-                "-d = " + discLearn + "\n"+
                 "-ep = " + evidPreds + "\n"+
                 "-qp = " + queryPreds + "\n"+
                 "-priorSoftEvidence = " + priorSoftEvidence + "\n"+
@@ -91,9 +94,12 @@ public class LearnArgs {
                 "-hp = " + hiddenPreds + "\n"+
                 "-numEMSamples = " + numEMSamples + "\n"+
                 "-queryEvidence = " + queryEvidence + "\n"+
-                "-usePrior = " + usePrior + "\n"+
-                "-numIter = " + numIter + "\n"+
-                "-minllChange = " + minllChange + "\n"
+                "-useMlnWts = " + useMlnWts + "\n"+
+                "-numIter = " + dNumIter + "\n"+
+                "-dMinllChange = " + dMinllChange + "\n"+
+                "-method = " + method + "\n" +
+                "-pll = " + pll + "\n" +
+                "-debug = " + debug + "\n"
                 ;
     }
 
@@ -144,11 +150,10 @@ public class LearnArgs {
     void validate()
     {
         if(genLearn) {
-            discLearn = false;
             if(queryPreds != null || evidPreds != null)
                 throw new ParameterException("Error !!! Can't provide query or evidence predicates in generative learning");
         }
-        if(discLearn)
+        else
         {
             if(queryPreds == null)
                 throw new ParameterException("Error !!! Necessary to provide query predicates in discriminative learning (use -qp)");
@@ -162,6 +167,10 @@ public class LearnArgs {
         {
             if(hiddenPreds == null)
                 throw new ParameterException("Error !!! Need to specify hidden preds");
+        }
+        if(!method.equals("cg") && !method.equals("lbfgs"))
+        {
+            throw new ParameterException("Error !!! Invalid method " + method);
         }
     }
     /**

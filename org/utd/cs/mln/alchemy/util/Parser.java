@@ -593,7 +593,8 @@ public class Parser {
                 gp.terms.add(Integer.parseInt(term));
             }
 
-            int gpIndex = groundMln.groundPredicates.indexOf(gp);
+            MyAssert.assume(groundMln.groundPredToIntegerMap.containsKey(gp));
+            int gpIndex = groundMln.groundPredToIntegerMap.get(gp);
             if(gpIndex == -1)
                 System.out.println("error in Parser::parseEvidence()");
             evidence.predIdVal.put(gpIndex, Integer.parseInt(value));
