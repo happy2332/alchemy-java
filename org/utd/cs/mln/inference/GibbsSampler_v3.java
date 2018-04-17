@@ -201,7 +201,7 @@ public class GibbsSampler_v3 extends MCMC{
 
     private void performGibbsStepForAllChains(boolean burningIn) {
         GibbsPerChain gibbsPerChain;
-        boolean withThread = false;
+        boolean withThread = true;
         if(withThread)
         {
             Thread t[] = new Thread[numChains];

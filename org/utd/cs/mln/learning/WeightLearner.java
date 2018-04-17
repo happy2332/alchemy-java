@@ -68,7 +68,7 @@ public abstract class WeightLearner {
         priorStdDevs = new double[numWts];
         Arrays.fill(priorStdDevs,2.0);
         priorLambda = new double[numWts];
-        Arrays.fill(priorLambda,0.0);
+        Arrays.fill(priorLambda,1.0);
 
         if(priorSoftEvidence){
             weights[numWts-1] = lArgs.seLambda;

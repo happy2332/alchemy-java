@@ -5,6 +5,7 @@ import com.beust.jcommander.ParameterException;
 import org.utd.cs.gm.utility.Timer;
 import org.utd.cs.mln.alchemy.core.*;
 import org.utd.cs.mln.alchemy.util.FullyGrindingMill;
+import org.utd.cs.mln.alchemy.util.MyAssert;
 import org.utd.cs.mln.alchemy.util.Parser;
 import org.utd.cs.mln.lmap.MlnToHyperCube;
 
@@ -30,27 +31,20 @@ public class InferTest {
         files.add(iArgs.evidFile);
         parser.setTruthEvidFiles(files);
         parser.parseInputMLNFile(iArgs.mlnFile);
-        Set<String> allPreds = new HashSet<String>();
-        List<String> closedWorldPreds = new ArrayList<>();
-        for(PredicateSymbol ps : mln.symbols)
-        {
-            allPreds.add(ps.symbol);
-        }
-        if(iArgs.evidPreds == null)
-        {
-            iArgs.evidPreds = new ArrayList<>();
-            iArgs.evidPreds.addAll(allPreds);
-            iArgs.evidPreds.removeAll(iArgs.queryPreds);
-        }
-        closedWorldPreds.addAll(iArgs.evidPreds);
-        closedWorldPreds.removeAll(iArgs.queryPreds);
+        Set<String> closedWorldPreds = new HashSet<>();
+        Set<String> evidPreds = parser.evidPreds, queryPreds = parser.queryPreds;
+        validateEvidQueryPreds(mln, evidPreds, queryPreds);
+        closedWorldPreds.addAll(evidPreds);
+        closedWorldPreds.removeAll(queryPreds);
 
         boolean isgroundwithhypercube = true;
         GroundMLN groundMln = null;
         Evidence gold = null;
         long time = System.currentTimeMillis();
         Map<GroundPredicate, Integer> groundPredicateIntegerMap = new HashMap<>();
-        List<GroundPredicate> groundPredicates = fgm.createGroundPredicates(mln, groundPredicateIntegerMap, iArgs.queryPreds);
+        Set<String> queryClusterPreds = new HashSet<String>(queryPreds);
+        queryClusterPreds.add("st");
+        List<GroundPredicate> groundPredicates = fgm.createGroundPredicates(mln, groundPredicateIntegerMap, queryClusterPreds);
         if(isgroundwithhypercube)
         {
             List<FirstEvidence> evidList = parser.parseInputEvidenceFile(iArgs.evidFile);
@@ -77,13 +71,13 @@ public class InferTest {
         {
             groundMln = fgm.ground(mln, groundPredicates, groundPredicateIntegerMap);
             Evidence evidence = parser.parseEvidence(groundMln, iArgs.evidFile);
-            List<String> hiddenPreds = new ArrayList<>();
+            Set<String> hiddenPreds = new HashSet<>();
 //        Map<Integer, List<Integer>> featureVectors = fgm.getFeatureVectors(groundMln, mln.formulas.size(), evidence, "person", varTypeToDomain.get("person"), false);
 //        writeFeatures(featureVectors,5,100);
 
             gold = parser.parseEvidence(groundMln, iArgs.goldFile);
 //            System.out.println("Total number of ground formulas (before handling evidence): " + groundMln.groundFormulas.size());
-            groundMln = fgm.handleEvidence(groundMln, evidence, gold, iArgs.evidPreds, iArgs.queryPreds, hiddenPreds, false, iArgs.queryEvidence);
+            groundMln = fgm.handleEvidence(groundMln, evidence, gold, evidPreds, queryPreds, hiddenPreds, false, iArgs.queryEvidence);
 
 //            System.out.println("Time taken to create MRF : " + Timer.time((System.currentTimeMillis() - time) / 1000.0));
 //
@@ -122,6 +116,17 @@ public class InferTest {
         inference.infer();
         inference.writeProbs(writer);
         writer.close();
+    }
+
+    private static void validateEvidQueryPreds(MLN mln, Set<String> evidPreds, Set<String> queryPreds) {
+        Set<String> allPreds = new HashSet<>();
+        for(PredicateSymbol ps : mln.symbols)
+        {
+            allPreds.add(ps.symbol);
+        }
+        allPreds.removeAll(evidPreds);
+        allPreds.removeAll(queryPreds);
+        MyAssert.assume(allPreds.size()==0);
     }
 
     private static void writeFeatures(Map<Integer, List<Integer>> featureVectors, int db, int evidPer) throws FileNotFoundException {

@@ -12,6 +12,9 @@ public class GroundMLN {
     public Map<Integer, GroundPredicate> indexToGroundPredMap = new HashMap<>();
     public Map<GroundPredicate,Integer> groundPredToIntegerMap = new HashMap<>();
     public List<GroundFormula> groundFormulas = new ArrayList<>();
+    public Map<Integer, List<Double>> softEvidencePerPredPerVal = new HashMap<>();
+    public boolean priorSoftEvidence = false;
+    // TODO : Fill softEvidencPerPredPerVal in addSoftEvidence function
 
 //    /**
 //     * This function fills in {@link GroundMLN#groundPredToIntegerMap} which creates a mapping from groundpredicate to its index in {@link GroundMLN#groundPredicates} list.

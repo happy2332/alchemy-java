@@ -32,10 +32,6 @@ public class InferArgs {
     public String goldFile;
     @Parameter(names="-e", description = "Evidence file", order = 3)
     public String evidFile;
-    @Parameter(names="-ep", description = "Comma separated evidence predicates (default : all except query predicates", order = 4)
-    public List<String> evidPreds;
-    @Parameter(names="-qp", description = "Comma separated query predicates", order = 5)
-    public List<String> queryPreds;
     @Parameter(names="-priorSoftEvidence", description = "If specified, include priorSoftEvidence", order = 6)
     public boolean priorSoftEvidence;
     @Parameter(names="-se", description = "Softevidence file (-priorSoftEvidence flag must be set)", order = 7)
@@ -62,8 +58,6 @@ public class InferArgs {
                 "-o = " + outFile + "\n"+
                 "-g = " + goldFile + "\n"+
                 "-e = " + evidFile + "\n"+
-                "-ep = " + evidPreds + "\n"+
-                "-qp = " + queryPreds + "\n"+
                 "-priorSoftEvidence = " + priorSoftEvidence + "\n"+
                 "-se = " + softEvidenceFile + "\n"+
                 "-sePred = " + sePred  + "\n"+

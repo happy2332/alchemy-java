@@ -1,17 +1,17 @@
 package org.utd.cs.mln.learning;
-import org.utd.cs.gm.utility.*;
 import org.utd.cs.gm.utility.Timer;
-import org.utd.cs.mln.alchemy.core.*;
-import org.utd.cs.mln.alchemy.util.FullyGrindingMill;
-import org.utd.cs.mln.alchemy.util.OtherUtils;
+import org.utd.cs.mln.alchemy.core.Evidence;
+import org.utd.cs.mln.alchemy.core.GroundMLN;
+import org.utd.cs.mln.alchemy.core.MLN;
+import org.utd.cs.mln.alchemy.util.Loss;
+import org.utd.cs.mln.alchemy.util.PseudoLogLikelihood;
 import util.LBFGS;
 import util.U;
 
-import java.io.BufferedReader;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.InputStreamReader;
-import java.util.*;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 
 /**
  * This class implements generative learning of MLN by maximizing pseudologlikelihood of data.
@@ -33,6 +33,9 @@ public class GenLearner extends WeightLearner{
 
     private double []gradient;
     private long time;
+    private boolean isPll = false;
+    private String method = "cg";
+    Loss loss;
 
     /**
      * Constructor : Initializes fields
@@ -49,209 +52,23 @@ public class GenLearner extends WeightLearner{
         super(mlnsParam, groundMlnsParam, groundMlnsEMParam, truthsParam, truthsEMParam, lArgs);
         if(lArgs.debug)
             genLearnDebug = true;
-        init(groundMlnsParam, truthsParam, lArgs);
-    }
-
-    /**
-     * Initializes fields :
-     * <ol>
-     *     <li>Create States according to GroundMLNs and truths</li>
-     *     <li>Fills in predToNumGndingsMap</li>
-     *     <li>Fills in satCounts</li>
-     * </ol>
-     * @param groundMlns
-     * @param truths
-     * @param lArgs
-     * @throws FileNotFoundException
-     */
-    void init(List<GroundMLN> groundMlns, List<Evidence> truths, LearnArgs lArgs) throws FileNotFoundException {
-        satCounts = new ArrayList<>();
-        predToNumGndingsMap = new ArrayList<>();
-        for (int i = 0; i < domain_cnt; i++) {
-            predToNumGndingsMap.add(new HashMap<String,Integer>());
-        }
-        gradient = new double[numWts];
-        createPredToNumGndingsMap();
-        long time = System.currentTimeMillis();
-        countSatVals();
-        System.out.println("Counting took " + org.utd.cs.gm.utility.Timer.time((System.currentTimeMillis() - time)/1000.0));
-    }
-
-
-    /**
-     * Fills in {@link GenLearner#predToNumGndingsMap}
-     */
-    private void createPredToNumGndingsMap() {
-        for(int domainId = 0 ; domainId < domain_cnt ; domainId++)
-        {
-            Map<String,Integer> predToNumGndingsMapPerDomain = predToNumGndingsMap.get(domainId);
-            GroundMLN groundMln = states.get(domainId).groundMLN;
-            for(GroundPredicate gp : groundMln.groundPredToIntegerMap.keySet())
-            {
-                String predName = gp.symbol.symbol;
-                if(!predToNumGndingsMapPerDomain.containsKey(predName))
-                {
-                    predToNumGndingsMapPerDomain.put(predName,0);
-                }
-                int oldVal = predToNumGndingsMapPerDomain.get(predName);
-                predToNumGndingsMapPerDomain.put(predName,oldVal+1);
-            }
-        }
-    }
-
-
-    /**
-     * For each domain, for each groundPred p, create Map of satCounts. Key : First order formulaId in which p occurs,
-     * value : List of true groundings of this formulaId for each possible value of p
-     */
-
-    void countSatVals() {
-        // for each domain
-        for (int domainId = 0 ; domainId < domain_cnt ; domainId++) {
-            System.out.println("Finding counts for domain "+(domainId+1));
-            State state = states.get(domainId);
-            Map<Integer, Map<Integer, List<Integer>>> satCountsPerDomain = new HashMap<>();
-            for (Integer i : state.groundMLN.indexToGroundPredMap.keySet()) {
-                satCountsPerDomain.put(i, new HashMap<Integer, List<Integer>>());
-            }
-            MLN mln = states.get(domainId).mln;
-            // for each formula, compute sat counts
-            for (int formulaId = 0; formulaId < mln.formulas.size(); formulaId++) {
-                Formula formula = mln.formulas.get(formulaId);
-                Set<Term> formulaWiseTermToGround = new HashSet<Term>();
-                for (WClause clause : formula.clauses) {
-                    for (Atom atom : clause.atoms) {
-                        for (int j = 0; j < atom.terms.size(); j++) {
-                            Term term = atom.terms.get(j);
-                            formulaWiseTermToGround.add(term);
-                        }
-                    }
-                }
-                if(genLearnDebug)
-                    System.out.println("Finding counts for formula : " + formulaId);
-                countSatValsPerFormula(domainId, formulaId, satCountsPerDomain, new ArrayList<Term>(formulaWiseTermToGround));
-            }
-            satCounts.add(satCountsPerDomain);
-        }
-    }
-
-
-    private void countSatValsPerFormula(int domainId, int formulaId, Map<Integer, Map<Integer, List<Integer>>> satCountsPerDomain, ArrayList<Term> terms) {
-        State state = states.get(domainId);
-        MLN mln = states.get(domainId).mln;
-        int[][] permutations = FullyGrindingMill.permute(terms);
-//        if(genLearnDebug)
-//            System.out.println("Number of permutations : " + permutations.length);
-        Map<GroundPredicate, Integer> groundPredToIntegerMap = state.groundMLN.groundPredToIntegerMap;
-        Formula formula = mln.formulas.get(formulaId);
-        for (int i = 0; i < permutations.length; i++) {
-//            if(genLearnDebug)
-//            {
-//                if (i % 100000 == 0)
-//                    System.out.println("i : " + i);
-//            }
-            GroundFormula newFormula = new GroundFormula();
-            List<GroundClause> newGroundClauseList = new ArrayList<GroundClause>();
-            Set<Integer> formulaGpIndices = new HashSet<>();
-            for (int c = 0; c < formula.clauses.size(); c++) {
-                WClause clause = formula.clauses.get(c);
-                GroundClause newGroundClause = new GroundClause();
-                Map<Integer, BitSet> gpIndexToSatVals = new HashMap<>();
-                // Iterate over each first order atom, and create ground atom for it.
-                for (int j = 0; j < clause.atoms.size(); j++) {
-                    boolean sign = clause.sign.get(j);
-                    Atom oldAtom = clause.atoms.get(j); // first order atom
-                    int valTrue = clause.valTrue.get(j);
-                    GroundPredicate gp = new GroundPredicate(); // GroundPredicate to create
-                    gp.symbol = new GroundPredicateSymbol(oldAtom.symbol.id, oldAtom.symbol.symbol, oldAtom.symbol.values, oldAtom.symbol.variable_types);
-                    // Fill in the terms with constants
-                    for (Term term : oldAtom.terms) {
-                        int termIndex = terms.indexOf(term);
-                        gp.terms.add(permutations[i][termIndex]);
-                    }
-
-                    int numPossibleValues = oldAtom.symbol.values.values.size();
-                    gp.numPossibleValues = numPossibleValues;
-                    int gpIndex = groundPredToIntegerMap.get(gp);
-                    formulaGpIndices.add(gpIndex);
-
-                    // Check if this groundPredicate occurs first time in this ground clause. then update
-                    // groundClause's data structures about this groundPredicate.
-                    int gpIndexInClause = newGroundClause.groundPredIndices.indexOf(gpIndex);
-                    //GroundAtom newGroundAtom = new GroundAtom(gpIndex, gpIndexInClause, valTrue, sign);
-                    if (gpIndexInClause == -1) {
-                        newGroundClause.groundPredIndices.add(gpIndex);
-                        gpIndexInClause = newGroundClause.groundPredIndices.size() - 1;
-                        newGroundClause.globalToLocalPredIndex.put(gpIndex, gpIndexInClause);
-                        gpIndexToSatVals.put(gpIndexInClause, new BitSet(gp.numPossibleValues));
-                    }
-
-                    // Now once we have added new ground Atom, we need to check if ground clause gets satisfied or not.
-                    BitSet gpBitSet = new BitSet(gp.numPossibleValues);
-                    gpBitSet.set(valTrue);
-                    if (sign == true)
-                        gpBitSet.flip(0, gp.numPossibleValues);
-                    gpBitSet.or(gpIndexToSatVals.get(gpIndexInClause));
-
-                    // If all bits are set for this groundPred, then this clause will always be satisfied and hence,
-                    // shouldn't be added into groundformula. Note that, although at this point, we know that
-                    // this clause shouldn't be added, but still we shouldn't just break out of this loop, as we
-                    // need to add groundPredicates, but we shouldn't add any clauseInfo into groundPredicates appearing
-                    // in this clause.
-
-                    gpIndexToSatVals.put(gpIndexInClause, gpBitSet);
-                }
-                for (int gpId = 0; gpId < newGroundClause.groundPredIndices.size(); gpId++) {
-                    BitSet b = gpIndexToSatVals.get(gpId);
-                    newGroundClause.grounPredBitSet.add(b);
-                }
-                newGroundClauseList.add(newGroundClause);
-            }
-            newFormula.groundClauses.addAll(newGroundClauseList);
-
-            for (Integer gpIndex : formulaGpIndices) {
-                int numPossibleValues = state.groundMLN.indexToGroundPredMap.get(gpIndex).numPossibleValues;
-                int tempTrueValue = state.truthVals.get(gpIndex);
-                int ftcPerValue[] = new int[numPossibleValues];
-
-                for (int predValue = 0; predValue < numPossibleValues; ++predValue) {
-                    state.truthVals.put(gpIndex, predValue);
-                    boolean isFormulaSatisfied = true;
-                    for (GroundClause gc : newFormula.groundClauses) {
-                        boolean isClauseSatisfied = false;
-                        for (int gpId : gc.groundPredIndices) {
-                            BitSet b = gc.grounPredBitSet.get(gc.globalToLocalPredIndex.get(gpId));
-                            isClauseSatisfied = b.get(state.truthVals.get(gpId));
-                            if (isClauseSatisfied) {
-                                break;
-                            }
-                        }
-                        isFormulaSatisfied = isClauseSatisfied;
-                        if (!isFormulaSatisfied) {
-                            break;
-                        }
-                    }
-                    if (isFormulaSatisfied) {
-
-                        ++ftcPerValue[predValue];
-
-                    }
-                }
-                Map<Integer, List<Integer>> satCountsMap = satCountsPerDomain.get(gpIndex);
-                if (!satCountsMap.containsKey(formulaId)) {
-                    satCountsMap.put(formulaId, new ArrayList<>(Collections.nCopies(numPossibleValues, 0)));
-                }
-                for (int j = 0; j < numPossibleValues; j++) {
-                    satCountsMap.get(formulaId).set(j, satCountsMap.get(formulaId).get(j) + ftcPerValue[j]);
-                }
-                state.truthVals.put(gpIndex, tempTrueValue);
-            }
-        }
+        isPll = lArgs.pll;
+        method = lArgs.method;
+        //init(groundMlnsParam, truthsParam, lArgs);
     }
 
     public void learnWeights() {
         time = System.currentTimeMillis();
         setMLNWeights();
+        if (isPll) {
+            loss = new PseudoLogLikelihood(states);
+        } else {
+            //TODO : get loss for likelihood
+        }
+        if (method.equals("lbfgs")) {
+            learnByLBFGS();
+        }
+
 //        if(withEM) {
 //            inferEM(true, true);
 //            subtypeTrueVal = getStTrueVal();
@@ -266,6 +83,10 @@ public class GenLearner extends WeightLearner{
         }
 //        prior = setPrior();
 //        System.out.println("Prior: " + Arrays.toString(prior));
+    }
+
+    void learnByLBFGS()
+    {
         LBFGS.Function f = new LBFGS.Function() {
             @Override
             public double evaluate(double[] beta, double[] g, int n, double step) {
@@ -294,10 +115,10 @@ public class GenLearner extends WeightLearner{
 //                else
                 {
                     //updateMLN(false);
-                    logLoss -= getPseudoLogLikelihood();
-                    double []tempGrad = getPseudoGradient();
+                    logLoss += loss.getLossValue();
+                    double []tempGrad = loss.getGradient();
                     for (int i = 0; i < g.length; i++) {
-                        g[i] -= tempGrad[i];
+                        g[i] += tempGrad[i];
                     }
                 }
 
@@ -308,8 +129,8 @@ public class GenLearner extends WeightLearner{
             }
         };
         LBFGS.Params p = new LBFGS.Params();
-            p.m = 5;
-            p.epsilon = 1.0E-3D;
+        p.m = 5;
+        p.epsilon = 1.0E-3D;
 //            p.past = 5;
 //            p.delta = 1.0E-7D;
 
@@ -334,152 +155,5 @@ public class GenLearner extends WeightLearner{
         LBFGS.Result r = LBFGS.lbfgs(weights, f, cb, p);
         U.p(r);
     }
-
-    private double[] getPseudoGradient() {
-        double[] gradientPerDomain;
-        Arrays.fill(gradient,0.0);
-        for (int domainID = 0; domainID < domain_cnt; ++domainID){
-            gradientPerDomain = getPseudoGradient(domainID);
-            for (int formulaID = 0; formulaID < numWts; ++formulaID){
-                gradient[formulaID] += gradientPerDomain[formulaID];
-            }
-        }
-
-        for (int formulaID = 0; formulaID < numWts; ++formulaID){
-            gradient[formulaID] -= (weights[formulaID] - priorMeans[formulaID]) * priorLambda[formulaID] / priorStdDevs[formulaID];
-        }
-        return gradient;
-    }
-
-    private double[] getPseudoGradient(int domainID) {
-        State state = states.get(domainID);
-        Map<Integer, Map<Integer, List<Integer>>> satCountsPerDomain = satCounts.get(domainID);
-        double[] gradientLocal = new double[numWts];
-        for (Integer predId : state.groundMLN.indexToGroundPredMap.keySet()) {
-            int trueVal = state.truthVals.get(predId);
-            int numPossibleVals = state.groundMLN.indexToGroundPredMap.get(predId).numPossibleValues;
-            List<Double> probDistribution = OtherUtils.getProbabilityDistribution(state.wtsPerPredPerVal.get(predId));
-            // For all the formulas in which this pred occurs, update their gradients
-            Map<Integer, List<Integer>> satCountsPerDomainPerPred = satCountsPerDomain.get(predId);
-            double[] gradientPerGp = new double[numWts];
-            String predName = states.get(domainID).groundMLN.indexToGroundPredMap.get(predId).symbol.symbol;
-            for(int formulaId : satCountsPerDomainPerPred.keySet())
-            {
-                // for ith formula, add n_i@(predId = trueVal)
-                gradientPerGp[formulaId] += satCountsPerDomainPerPred.get(formulaId).get(trueVal);
-
-                // Now subtract expected value of n_i(predId).
-                // To calculate expected value, for each possible value val of predId, sum n_i@val * P(predId = val)
-                double E_N_i = 0;
-                for(int val = 0 ; val < numPossibleVals ; val++)
-                {
-                    E_N_i += satCountsPerDomainPerPred.get(formulaId).get(val) * probDistribution.get(val);
-                }
-                gradientPerGp[formulaId] -= E_N_i;
-                gradientPerGp[formulaId] /= predToNumGndingsMap.get(domainID).get(predName);
-            }
-            for (int formulaId = 0; formulaId < numFormulas; formulaId++) {
-                gradientLocal[formulaId] += gradientPerGp[formulaId];
-            }
-            if(priorSoftEvidence)
-            {
-                if(softEvidencePerPredPerVal.get(domainID).containsKey(predId))
-                {
-                    gradientLocal[numWts-1] += softEvidencePerPredPerVal.get(domainID).get(predId).get(trueVal);
-                    double expectedVal = 0.0;
-                    for (int val = 0; val < numPossibleVals; val++) {
-                        expectedVal += softEvidencePerPredPerVal.get(domainID).get(predId).get(val);
-                    }
-                    gradientLocal[numWts-1] -= expectedVal;
-                    gradientLocal[numWts-1] /= predToNumGndingsMap.get(domainID).get(predName);
-                }
-
-            }
-        }
-
-//        if(priorSoftEvidence){
-//            for (Integer predID : lambdaPerPredPerValue.keySet()){
-//                int numPossibleValues = predList.get(predID).numPossibleValues;
-//                gradient[numFormulas] += lambdaPerPredPerValue.get(predID).get(state.truthVals.get(predID)).getValue();
-//                List<Double> probDistribution = OtherUtils.getProbabilityDistribution(state.wtsPerPredPerVal.get(predID));
-//                for (int value = 0; value < numPossibleValues; ++value){
-//                    gradient[numFormulas] -= probDistribution.get(value) * lambdaPerPredPerValue.get(predID).get(value).getValue();
-//                }
-//            }
-//        }
-        return gradientLocal;
-    }
-
-    private double getPseudoLogLikelihood() {
-        double likelihood = 0;
-        for (int domainIndex = 0; domainIndex < domain_cnt; ++domainIndex){
-            likelihood += getPseudoLogLikelihood(domainIndex);
-        }
-
-        for (int formulaID = 0; formulaID < numWts; ++formulaID){
-            double temp = (weights[formulaID] - priorMeans[formulaID])/priorStdDevs[formulaID];
-            likelihood -= temp * temp * priorLambda[formulaID] / 2;
-        }
-        return likelihood;
-    }
-
-    private double getPseudoLogLikelihood(int domainIndex) {
-        if(genLearnDebug) {
-            System.out.println("Calculating Pseudo Log Likelihood...");
-        }
-        resetWtsPerPredPerVal(domainIndex);
-        setWtsPerPredPerVal(domainIndex);
-        State state = states.get(domainIndex);
-        double pll = 0;
-        for(Integer gpId : state.groundMLN.indexToGroundPredMap.keySet()) {
-            double d = OtherUtils.getProbabilityDistribution(state.wtsPerPredPerVal.get(gpId)).get(state.truthVals.get(gpId));
-            String predName = state.groundMLN.indexToGroundPredMap.get(gpId).symbol.symbol;
-            pll += (Math.log(d)/predToNumGndingsMap.get(domainIndex).get(predName));
-        }
-
-        return pll;
-    }
-
-    private void setWtsPerPredPerVal(int domainIndex) {
-        Map<Integer, Map<Integer, List<Integer>>> satCountsPerDomain = satCounts.get(domainIndex);
-        MLN mln = states.get(0).mln;
-        State state = states.get(domainIndex);
-        for (Integer gpId : satCountsPerDomain.keySet()) {
-            Map<Integer, List<Integer>> satCountsPerDomainPerPred = satCountsPerDomain.get(gpId);
-            int numPossibleVals = state.groundMLN.indexToGroundPredMap.get(gpId).numPossibleValues;
-            for(int formulaId : satCountsPerDomainPerPred.keySet())
-            {
-                double formulaWt = weights[formulaId];
-                List<Integer> satCountsPerDomainPerPredPerFormula = satCountsPerDomainPerPred.get(formulaId);
-                for (int val = 0; val < numPossibleVals; val++) {
-                    int satCount = satCountsPerDomainPerPredPerFormula.get(val);
-                    double oldVal = state.wtsPerPredPerVal.get(gpId).get(val);
-                    state.wtsPerPredPerVal.get(gpId).set(val, oldVal + satCount*formulaWt);
-                }
-            }
-            if(priorSoftEvidence)
-            {
-                if(softEvidencePerPredPerVal.get(domainIndex).containsKey(gpId))
-                {
-                    double lambda = weights[numWts-1];
-                    for (int val = 0; val < numPossibleVals; val++) {
-                        double oldVal = state.wtsPerPredPerVal.get(gpId).get(val);
-                        state.wtsPerPredPerVal.get(gpId).set(val, oldVal + lambda * softEvidencePerPredPerVal.get(domainIndex).get(gpId).get(val));
-                    }
-                }
-            }
-
-        }
-    }
-
-    private void resetWtsPerPredPerVal(int domainIndex) {
-        State state = states.get(domainIndex);
-        for (Integer gpId : state.groundMLN.indexToGroundPredMap.keySet()) {
-            int numPossibleVals = state.wtsPerPredPerVal.get(gpId).size();
-            for(int val = 0 ; val < numPossibleVals ; val++)
-            {
-                state.wtsPerPredPerVal.get(gpId).set(val,0.0);
-            }
-        }
-    }
 }
+

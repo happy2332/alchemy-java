@@ -54,7 +54,7 @@ public class MlnToHyperCube {
     // To store these lists, we create a hashMap with key : predicateSymbol, value : List of size (numPossibleVals)+1. This list
     // stores list of hypercubes for each of the state of predicate.
 
-    public HashMap<PredicateSymbol,ArrayList<ArrayList<HyperCube>>> createPredsHyperCube(List<FirstEvidence> evidList, MLN mln, List<String> closedworldpreds){
+    public HashMap<PredicateSymbol,ArrayList<ArrayList<HyperCube>>> createPredsHyperCube(List<FirstEvidence> evidList, MLN mln, Set<String> closedworldpreds){
 
         // First create a similar hashMap, but instead of hyperCube it stores each tuple
         HashMap<PredicateSymbol,ArrayList<ArrayList<TupleConstants>>> predsTuplesHashMap = new HashMap<PredicateSymbol,ArrayList<ArrayList<TupleConstants>>>();
@@ -1078,7 +1078,7 @@ public class MlnToHyperCube {
         ArrayList<FirstEvidence> evidList = parser.parseInputEvidenceFile("smoke/smoke_evidence.txt");
         //ArrayList<Evidence> evidList = parser.parseInputEvidenceFile("entity_resolution/er-test-eclipse.db");
         MlnToHyperCube mlnToHyperCube = new MlnToHyperCube();
-        HashMap<PredicateSymbol,ArrayList<ArrayList<HyperCube>>> predsHyperCubeHashMap = mlnToHyperCube.createPredsHyperCube(evidList,mln,new ArrayList<String>());
+        HashMap<PredicateSymbol,ArrayList<ArrayList<HyperCube>>> predsHyperCubeHashMap = mlnToHyperCube.createPredsHyperCube(evidList,mln,new HashSet<String>());
 
 
         for(PredicateSymbol predSymbol : predsHyperCubeHashMap.keySet()){

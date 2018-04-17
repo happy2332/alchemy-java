@@ -32,6 +32,7 @@ public class Parser {
 
 	private static final String REGEX_ESCAPE_CHAR = "\\";
     private List<String> truthEvidFiles;
+    public Set<String> queryPreds = new HashSet<>(), evidPreds = new HashSet<>();
 
 
     public void collectDomain(List<String> files) throws FileNotFoundException {
@@ -413,6 +414,32 @@ public class Parser {
 	{
 		String[] predArr = line.split(REGEX_ESCAPE_CHAR + LEFTPRNTH);
 		String symbolName = predArr[0];
+		boolean isQuery = false, isEvidence = false;
+		if(symbolName.charAt(0) == '*')
+        {
+            isQuery = true;
+            if(symbolName.charAt(1) == '@')
+            {
+                isEvidence = true;
+            }
+        }
+        else if(symbolName.charAt(0) == '@')
+        {
+            isEvidence = true;
+            if(symbolName.charAt(1) == '*')
+            {
+                isQuery = true;
+            }
+        }
+        symbolName = symbolName.replaceAll("[*@]","");
+        if(isQuery)
+        {
+            queryPreds.add(symbolName);
+        }
+        if(isEvidence)
+        {
+            evidPreds.add(symbolName);
+        }
 		String[] predArr2 = predArr[1].split(EQUALSTO);
 		String valuesName = predArr2[1];
 		String[] termNames = predArr2[0].replace(RIGHTPRNTH, "").split(COMMASEPARATOR);

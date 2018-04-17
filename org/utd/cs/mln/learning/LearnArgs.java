@@ -32,12 +32,6 @@ public class LearnArgs {
     public List<String> truthFiles;
     @Parameter(names="-e", description = "Comma separated evidence files", order = 3)
     public List<String> evidenceFiles;
-    @Parameter(names="-g", description = "If specified, do generative learning", order = 4)
-    public boolean genLearn = false;
-    @Parameter(names="-ep", description = "Comma separated evidence predicates (default : all except query and hidden predicates", order = 6)
-    public List<String> evidPreds;
-    @Parameter(names="-qp", description = "Comma separated query predicates", order = 7)
-    public List<String> queryPreds;
     @Parameter(names="-priorSoftEvidence", description = "If specified, include priorSoftEvidence", order = 8)
     public boolean priorSoftEvidence;
     @Parameter(names="-se", description = "Comma separated softevidence files (-priorSoftEvidence flag must be set)", order = 9)
@@ -48,8 +42,6 @@ public class LearnArgs {
     public double seLambda = 1.0;
     @Parameter(names="-withEm", description = "If specified, learn with EM", order = 12)
     public boolean withEM;
-    @Parameter(names="-hp", description = "Comma separated hidden predicates (-withEM flag must be set)", order = 13)
-    public List<String> hiddenPreds;
     @Parameter(names="-numEMSamples", description = "Number of samples in E step of EM (-withEM flag must be set)", order = 14)
     public int numEMSamples = 10;
     @Parameter(names="-queryEvidence", description = "If specified, make all query ground predicates not specified in training file as evidence)", order = 15)
@@ -83,15 +75,11 @@ public class LearnArgs {
                 "-o = " + outFile + "\n"+
                 "-t = " + truthFiles + "\n"+
                 "-e = " + evidenceFiles + "\n"+
-                "-g = " + genLearn + "\n"+
-                "-ep = " + evidPreds + "\n"+
-                "-qp = " + queryPreds + "\n"+
                 "-priorSoftEvidence = " + priorSoftEvidence + "\n"+
                 "-se = " + softEvidenceFiles + "\n"+
                 "-sePred = " + sePred  + "\n"+
                 "-seLambda = " + seLambda + "\n"+
                 "-withEM = " + withEM + "\n"+
-                "-hp = " + hiddenPreds + "\n"+
                 "-numEMSamples = " + numEMSamples + "\n"+
                 "-queryEvidence = " + queryEvidence + "\n"+
                 "-useMlnWts = " + useMlnWts + "\n"+
@@ -149,24 +137,10 @@ public class LearnArgs {
      */
     void validate()
     {
-        if(genLearn) {
-            if(queryPreds != null || evidPreds != null)
-                throw new ParameterException("Error !!! Can't provide query or evidence predicates in generative learning");
-        }
-        else
-        {
-            if(queryPreds == null)
-                throw new ParameterException("Error !!! Necessary to provide query predicates in discriminative learning (use -qp)");
-        }
         if(priorSoftEvidence)
         {
             if(softEvidenceFiles == null || sePred.isEmpty())
                 throw new ParameterException("Error !!! Need to specify softEvidence files and sePred");
-        }
-        if(withEM)
-        {
-            if(hiddenPreds == null)
-                throw new ParameterException("Error !!! Need to specify hidden preds");
         }
         if(!method.equals("cg") && !method.equals("lbfgs"))
         {

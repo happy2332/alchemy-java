@@ -62,7 +62,7 @@ public class FeatureCreator {
         // This groundMLN will contain only list of groundPredicates, not groundformulas since we are not grounding MLN.
         GroundMLN groundMLN = new GroundMLN();
         Map<GroundPredicate, Integer> groundPredicateIntegerMap = new HashMap<>();
-        List<String> queryPreds = new ArrayList<>();
+        Set<String> queryPreds = new HashSet<>();
         for(PredicateSymbol ps : mln.symbols)
         {
             queryPreds.add(ps.symbol);

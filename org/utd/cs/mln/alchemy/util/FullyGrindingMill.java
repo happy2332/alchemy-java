@@ -412,7 +412,7 @@ public class FullyGrindingMill {
 
     }
 
-    public GroundMLN handleEvidence(GroundMLN groundMln, Evidence evidence, Evidence truth, List<String> evidence_preds, List<String> query_preds, List<String> hidden_preds, boolean withEM, boolean queryEvidence) throws CloneNotSupportedException {
+    public GroundMLN handleEvidence(GroundMLN groundMln, Evidence evidence, Evidence truth, Set<String> evidence_preds, Set<String> query_preds, Set<String> hidden_preds, boolean withEM, boolean queryEvidence) throws CloneNotSupportedException {
         GroundMLN newGroundMln = new GroundMLN();
         newGroundMln.indexToGroundPredMap = groundMln.indexToGroundPredMap;
         newGroundMln.groundPredToIntegerMap = groundMln.groundPredToIntegerMap;
@@ -474,10 +474,13 @@ public class FullyGrindingMill {
                             }
                         }
                     }
-                    if(hidden_preds.size() > 0){
-                        if (hidden_preds.contains(gp.symbol.symbol))
-                            toAdd = true;
+                    else{
+                        if(hidden_preds.size() > 0){
+                            if (hidden_preds.contains(gp.symbol.symbol))
+                                toAdd = true;
+                        }
                     }
+
 
                     if(toAdd)
                     {
@@ -910,7 +913,7 @@ public class FullyGrindingMill {
      * @param mln Input MLN
      * @return List of ground predicates
      */
-    public static List<GroundPredicate> createGroundPredicates(MLN mln, Map<GroundPredicate, Integer> groundPredToIntegerMap, List<String> queryPreds) {
+    public static List<GroundPredicate> createGroundPredicates(MLN mln, Map<GroundPredicate, Integer> groundPredToIntegerMap, Set<String> queryPreds) {
         List<GroundPredicate> groundPredsList = new ArrayList<GroundPredicate>();
         // For each pred symbol in MLN, create its groundings based on domain of its terms
 

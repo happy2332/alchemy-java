@@ -24,7 +24,7 @@ public class GibbsParams extends MCMCParams{
     }
 
     public GibbsParams() {
-        numChains       = 5;
+        numChains       = 10;
         burnMinSteps    = 100;
         burnMaxSteps    = 100;
         minSteps        = -1;
