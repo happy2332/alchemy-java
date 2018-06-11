@@ -241,6 +241,7 @@ public class FullyGrindingMill {
                 newGroundClause.formulaId = currentFormulaId;
                 newGroundClause.weight = new LogDouble(clause.weight.getValue(), true);
                 Map<Integer, BitSet> gpIndexToSatVals = new HashMap<>();
+                List<GroundPredicate> allNewGroundPreds = new ArrayList<>();
                 List<GroundPredicate> newGroundPreds = new ArrayList<>(); // We need this list because once a groundClause is created, we want to
                 // update formulaIds info of each groundPred. We can't do it on the go because we don't know whether groundClause will be created
                 // or not, since it can be removed due to preprocessing.
@@ -270,6 +271,7 @@ public class FullyGrindingMill {
                     // Check if this groundPredicate occurs first time in this ground clause. then update
                     // groundClause's data structures about this groundPredicate.
                     int gpIndexInClause = newGroundClause.groundPredIndices.indexOf(gpIndex);
+                    allNewGroundPreds.add(gp);
                     //GroundAtom newGroundAtom = new GroundAtom(gpIndex, gpIndexInClause, valTrue, sign);
                     if(gpIndexInClause == -1)
                     {
@@ -316,6 +318,11 @@ public class FullyGrindingMill {
                             gp.groundFormulaIds.put(currentFormulaId, new HashSet<Integer>());
                         }
                         gp.groundFormulaIds.get(currentFormulaId).add(newGroundClauseList.size()-1);
+                    }
+                    for(GroundPredicate gp : allNewGroundPreds)
+                    {
+                        int gpIndex = groundMln.groundPredToIntegerMap.get(gp);
+                        newFormula.allGroundPredIndices.add(gpIndex);
                     }
                 }
             }
@@ -913,7 +920,7 @@ public class FullyGrindingMill {
      * @param mln Input MLN
      * @return List of ground predicates
      */
-    public static List<GroundPredicate> createGroundPredicates(MLN mln, Map<GroundPredicate, Integer> groundPredToIntegerMap, Set<String> queryPreds) {
+    public List<GroundPredicate> createGroundPredicates(MLN mln, Map<GroundPredicate, Integer> groundPredToIntegerMap, Set<String> queryPreds) {
         List<GroundPredicate> groundPredsList = new ArrayList<GroundPredicate>();
         // For each pred symbol in MLN, create its groundings based on domain of its terms
 

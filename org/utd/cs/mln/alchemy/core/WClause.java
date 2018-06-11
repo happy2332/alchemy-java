@@ -104,6 +104,7 @@ public class WClause {
 		}
 		atoms.remove(index);
 		sign.remove(index);
+		valTrue.remove(index);
 	}
 	
 	public void findSelfJoins(Map<Integer, List<Integer>> selfJoinedAtoms) {

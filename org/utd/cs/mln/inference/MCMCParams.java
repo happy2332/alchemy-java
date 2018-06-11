@@ -11,6 +11,32 @@ public class MCMCParams {
     public int numChains;
     // Min. no. of burn-in steps MCMC will take per chain
     public int burnMinSteps;
+    // Max. no. of burn-in steps MCMC will take per chain
+    public int burnMaxSteps;
+    // Min. no. of sampling steps MCMC will take per chain
+    public int minSteps;
+    // Max. no. of sampling steps MCMC will take per chain
+    public int maxSteps;
+    // Max. no. of seconds MCMC should run
+    public int maxSeconds;
+
+    public MCMCParams(MCMCParams other) {
+        this.numChains = other.numChains;
+        this.burnMinSteps = other.burnMinSteps;
+        this.burnMaxSteps = other.burnMaxSteps;
+        this.minSteps = other.minSteps;
+        this.maxSteps = other.maxSteps;
+        this.maxSeconds = other.maxSeconds;
+    }
+
+    public MCMCParams() {
+        numChains       = 10;
+        burnMinSteps    = 100;
+        burnMaxSteps    = 100;
+        minSteps        = -1;
+        maxSteps        = 1000;
+        maxSeconds      = -1;
+    }
 
     @Override
     public String toString() {
@@ -22,14 +48,6 @@ public class MCMCParams {
                 ", maxSteps=" + maxSteps +
                 ", maxSeconds=" + maxSeconds +
                 '}';
-    }
 
-    // Max. no. of burn-in steps MCMC will take per chain
-    int burnMaxSteps;
-    // Min. no. of sampling steps MCMC will take per chain
-    int minSteps;
-    // Max. no. of sampling steps MCMC will take per chain
-    int maxSteps;
-    // Max. no. of seconds MCMC should run
-    int maxSeconds;
+    }
 }

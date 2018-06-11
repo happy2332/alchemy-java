@@ -42,7 +42,7 @@ public class Formula {
 					if(k < atom.terms.size()-1)
 						result += ",";
 				}
-				result += ")";
+				result += ")=" + clause.valTrue.get(j);
 				if(j < clause.atoms.size()-1)
 					result += " | ";
 			}

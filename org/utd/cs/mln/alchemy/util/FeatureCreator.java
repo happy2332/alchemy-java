@@ -20,7 +20,7 @@ import java.util.*;
  */
 public class FeatureCreator {
     public static void main(String []args) throws ParameterException, FileNotFoundException, PredicateNotFound {
-        // args must be of length 3
+        // args must be of length 5
         if(args.length != 5)
             throw new ParameterException("Wrong arguments !!!");
         String mlnFile = args[0];
@@ -40,7 +40,7 @@ public class FeatureCreator {
         parser.parseInputMLNFile(mlnFile);
 
         GroundMLN groundMLN = createGroundMLN(mln);
-        Evidence truth = parser.parseEvidence(groundMLN,evidFile);
+        Evidence truth = parser.parseEvidence(groundMLN,evidFile,parser.queryPreds);
         Map<Integer, List<Integer>> features = createFeatures(mln, groundMLN, truth, typeName, mln.varTypeToDomainMap.get(typeName), closedWorld);
         writeFeatures(features, outFile);
     }
@@ -67,7 +67,8 @@ public class FeatureCreator {
         {
             queryPreds.add(ps.symbol);
         }
-        List<GroundPredicate> groundPredicates = FullyGrindingMill.createGroundPredicates(mln, groundPredicateIntegerMap, queryPreds);
+        FullyGrindingMill fgm = new FullyGrindingMill();
+        List<GroundPredicate> groundPredicates = fgm.createGroundPredicates(mln, groundPredicateIntegerMap, queryPreds);
         for (int i = 0; i < groundPredicates.size(); i++) {
             groundMLN.indexToGroundPredMap.put(i, groundPredicates.get(i));
         }

@@ -15,6 +15,8 @@ public class GroundFormula {
     public List<Integer> numCopies = new ArrayList<Integer>(); // for each first order formula from which this groundformula is coming, it stores number of copies of it.
     public LogDouble weight;
     public  LogDouble originalWeight; // weight without multiplication with softEvidenceLambda
+    public Map<Integer, List<Double>> numConnections = new HashMap<>();
+    public List<Integer> allGroundPredIndices = new ArrayList<>();
 
     @Override
     public String toString() {

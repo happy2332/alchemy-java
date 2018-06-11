@@ -3,10 +3,7 @@ package org.utd.cs.mln.inference;
 import org.utd.cs.mln.alchemy.core.State;
 
 import java.io.PrintWriter;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 
 /**
  * Abstract class from which all inference algorithms are derived.
@@ -19,26 +16,26 @@ import java.util.Random;
 public abstract class Inference {
     private final int DEFAULT_SEED = 2350877;
 
-    // Whether to save all counts for all samples or not i.e. whether fill allFormulaTrueCnts and oldAllFormulaTrueCnts
-    boolean saveAllCounts;
+    // whether we want to calculate marginal of each predicate or not
+    boolean calculateMarginal;
 
     public State state;
 
     int seed;
 
-    // Indicates if need to store true counts for each first-order formula
+    // Indicates if need to store formulaTrueCnts and formulaTrueSqCnts or not
     boolean trackFormulaTrueCnts;
 
-    // sum of true counts and true squared counts of first order formulas over all samples.
+    // Expected true counts and true squared counts of first order formulas.
     // If softEvidence, then size is +1
-    double [] formulaTrueCnts, formulaTrueSqCnts;
+    // Note that we are not taking them to be List because we want to increment the counts regularly, and doing that
+    // is cumbersome in Lists.
+    public double [] formulaTrueCnts, formulaTrueSqCnts;
 
-    // allFormulaTrueCnts[i][j] is the number of true groundings of jth formula in ith sample
-    // oldAllFormulaTrueCnts[i][j] is the number of true groundings of jth formula in ith sample in the previous iter of learning
-    List<List<Double>> allFormulaTrueCnts, oldAllFormulaTrueCnts;
+    // For each ground pred g, holds number of times g is set to a value val
+    // numValPerPred[g][val]
+    Map<Integer, List<Double>> numValPerPred_;
 
-    // Number of samples taken of the true counts so far.
-    int numSamples;
     Random rand;
 
     //Indicates whether softEvidence is given or not
@@ -57,7 +54,7 @@ public abstract class Inference {
      * @param seed Seed used to initialize randomization in the algorithm.
      * @param trackFormulaTrueCnts Indicates if need to store true counts for each first-order formula
      */
-    public Inference(State state, int seed, boolean trackFormulaTrueCnts, boolean priorSoftEvidence)
+    public Inference(State state, int seed, boolean trackFormulaTrueCnts, boolean priorSoftEvidence, boolean calculateMarginal)
     {
         this.state = state;
         this.seed = seed;
@@ -65,20 +62,24 @@ public abstract class Inference {
             this.seed = DEFAULT_SEED;
         this.trackFormulaTrueCnts = trackFormulaTrueCnts;
         this.priorSoftEvidence = priorSoftEvidence;
-        this.saveAllCounts = false;
-        this.numSamples = 0;
-        this.rand = new Random(seed);
+        this.calculateMarginal = calculateMarginal;
+        this.rand = new Random();
         numWts = state.mln.formulas.size();
         if(priorSoftEvidence)
             numWts++;
 
-        if(trackFormulaTrueCnts && state != null)
+        if(trackFormulaTrueCnts)
         {
             formulaTrueCnts = new double[numWts];
             formulaTrueSqCnts = new double[numWts];
         }
-        allFormulaTrueCnts = new ArrayList<>();
-        oldAllFormulaTrueCnts = new ArrayList<>();
+
+        numValPerPred_ = new HashMap<>();
+        for(Integer g : state.groundMLN.indexToGroundPredMap.keySet())
+        {
+            int numVals = state.groundMLN.indexToGroundPredMap.get(g).numPossibleValues;
+            numValPerPred_.put(g, new ArrayList<Double>(Collections.nCopies(numVals, 0.0)));
+        }
     }
 
     /**
@@ -89,63 +90,12 @@ public abstract class Inference {
     /**
      * Performs the inference algorithm.
      */
-    abstract void infer();
+    abstract public void infer();
 
     /**
      * Prints the probabilities of each predicate.
      */
     abstract void writeProbs(PrintWriter writer);
-
-    /**
-     * Computes Hessian vector product. Hessian is of the matrix allFormulaTrueCnts.
-     * @param v vector to which Hessian is to be multiplied
-     * @return resultant vector
-     */
-    public double[] getHessianVectorProduct(double[] v) {
-        // For minimizing the negative log likelihood,
-        // the ith element of H v is:
-        //   E[n_i * vn] - E[n_i] E[vn]
-        // where n is the vector of all clause counts
-        // and vn is the dot product of v and n.
-
-        double sumVN = 0;
-        double []sumN = new double[numWts];
-        double []sumNiVN = new double[numWts];
-
-        // Get sufficient statistics from each sample,
-        // so we can compute expectations
-        int numSamples = allFormulaTrueCnts.size();
-        for (int s = 0; s < numSamples; s++)
-        {
-            List<Double> n1 = allFormulaTrueCnts.get(s);
-
-            // Compute v * n
-            double vn = 0;
-
-            for (int i = 0; i < numWts; i++)
-                vn += v[i] * n1.get(i);
-
-            // Tally v*n, n_i, and n_i v*n
-            sumVN += vn;
-            for (int i = 0; i < numWts; i++)
-            {
-                sumN[i]    += n1.get(i);
-                sumNiVN[i] += n1.get(i) * vn;
-            }
-        }
-
-        // Compute actual product from the sufficient stats
-        double []product = new double[numWts];
-        for (int formulano = 0; formulano < numWts; formulano++)
-        {
-            double E_vn = sumVN/numSamples;
-            double E_ni = sumN[formulano]/numSamples;
-            double E_nivn = sumNiVN[formulano]/numSamples;
-            product[formulano] = E_nivn - E_ni * E_vn;
-        }
-
-        return product;
-    }
 
     /**
      * Resets all counts
@@ -154,58 +104,17 @@ public abstract class Inference {
         if(trackFormulaTrueCnts){
             Arrays.fill(formulaTrueCnts,0.0);
             Arrays.fill(formulaTrueSqCnts,0.0);
-            numSamples = 0;
-            if(saveAllCounts)
-            {
-                allFormulaTrueCnts = new ArrayList<List<Double>>();
-            }
-
         }
-    }
-
-    /**
-     * If we are storing all counts, then restore all counts from old counts
-     */
-    public void restoreCnts() {
-        if (!saveAllCounts)
-            return;
-
-        resetCnts();
-        System.out.println("Restoring counts...");
-        if(trackFormulaTrueCnts){
-            for (int i = 0; i < oldAllFormulaTrueCnts.size(); i++)
-            {
-                allFormulaTrueCnts.add(new ArrayList<Double>());
-                int numcounts = oldAllFormulaTrueCnts.get(i).size();
-                for (int j = 0; j < numcounts; j++)
-                {
-                    allFormulaTrueCnts.get(i).add(oldAllFormulaTrueCnts.get(i).get(j));
-                    formulaTrueCnts[j] += allFormulaTrueCnts.get(i).get(j);
-                    formulaTrueSqCnts[j] += allFormulaTrueCnts.get(i).get(j) * allFormulaTrueCnts.get(i).get(j);
-                }
-                numSamples++;
+        if(calculateMarginal)
+        {
+            for(int gpId : numValPerPred_.keySet()) {
+                int numPossibleVals = numValPerPred_.get(gpId).size();
+                numValPerPred_.put(gpId, new ArrayList<>(Collections.nCopies(numPossibleVals, 0.0)));
             }
         }
+
     }
 
-    /**
-     * If we are storing all counts, save current all counts to old all counts
-     */
-    public void saveToOldCnts() {
-        if (!saveAllCounts)
-            return;
-
-        if(trackFormulaTrueCnts){
-            for (int i = 0; i < allFormulaTrueCnts.size(); i++)
-            {
-                int numcounts = allFormulaTrueCnts.get(i).size();
-                for (int j = 0; j < numcounts; j++)
-                {
-                    oldAllFormulaTrueCnts.get(i).set(j, allFormulaTrueCnts.get(i).get(j));
-                }
-            }
-        }
-    }
 
     public void writeNetwork(PrintWriter writer) {
         writer.write(state.groundMLN.writableString());

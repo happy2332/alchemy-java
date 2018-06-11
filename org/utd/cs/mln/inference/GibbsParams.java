@@ -23,18 +23,22 @@ public class GibbsParams extends MCMCParams{
                 "} " + super.toString();
     }
 
+    public GibbsParams(GibbsParams other) {
+        super(other);
+        this.gamma = other.gamma;
+        this.epsilonError = other.epsilonError;
+        this.fracConverged = other.fracConverged;
+        this.testConvergence = other.testConvergence;
+        this.samplesPerTest = other.samplesPerTest;
+    }
+
     public GibbsParams() {
-        numChains       = 10;
-        burnMinSteps    = 100;
-        burnMaxSteps    = 100;
-        minSteps        = -1;
-        maxSteps        = 2000;
-        maxSeconds      = -1;
-        gamma           = 1 - 0.05;;
+        super();
+        gamma           = 1 - 0.05;
         epsilonError    = 0.01;
         fracConverged   = 0.95;
         testConvergence = true;
-        samplesPerTest  = 100;
+        samplesPerTest  = 10;
     }
 
 }

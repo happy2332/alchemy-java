@@ -1,6 +1,9 @@
 package org.utd.cs.mln.alchemy.core;
 
 import org.utd.cs.gm.core.LogDouble;
+import org.utd.cs.gm.utility.Pair;
+import org.utd.cs.mln.alchemy.util.Aggregator;
+import org.utd.cs.mln.alchemy.util.VecOperations;
 
 import java.util.*;
 
@@ -79,5 +82,72 @@ public class GroundMLN {
             result += " :: " + gf.weight.getValue() +"\n";
         }
         return result;
+    }
+
+    public void setNumConnections()
+    {
+        Map<Integer, Map<Pair, Double>> connections = new HashMap<>();
+        long time = System.currentTimeMillis();
+        for(GroundFormula gf : groundFormulas)
+        {
+            List<Integer> formulaIds = gf.parentFormulaId;
+            for(int formulaId : formulaIds)
+            {
+                if(!connections.containsKey(formulaId))
+                {
+                    connections.put(formulaId, new HashMap<Pair, Double>());
+                }
+
+                for (int i = 0 ; i < gf.allGroundPredIndices.size() ; i++) {
+                    int gpIndex = gf.allGroundPredIndices.get(i);
+                    Pair key = new Pair(i,gpIndex);
+                    if(!connections.get(formulaId).containsKey(key))
+                    {
+                        connections.get(formulaId).put(key,0.0);
+                    }
+                    double val = connections.get(formulaId).get(key);
+                    connections.get(formulaId).put(key,val+1);
+                }
+            }
+        }
+        System.out.println("Time taken ; " + org.utd.cs.gm.utility.Timer.time((System.currentTimeMillis() - time)/1000.0));
+        for(GroundFormula gf : groundFormulas)
+        {
+            List<Integer> formulaIds = gf.parentFormulaId;
+            for(int formulaId : formulaIds)
+            {
+                gf.numConnections.put(formulaId, new ArrayList<Double>());
+                for (int i = 0 ; i < gf.allGroundPredIndices.size() ; i++) {
+                    int gpIndex = gf.allGroundPredIndices.get(i);
+                    Pair key = new Pair(i,gpIndex);
+                    gf.numConnections.get(formulaId).add(connections.get(formulaId).get(key));
+                }
+            }
+            //System.out.println("parentId : "+gf.parentFormulaId);
+            //System.out.println("numConnections : "+gf.numConnections);
+        }
+        System.gc();
+    }
+
+    public void setEffWts(MLN mln)
+    {
+        for(GroundFormula gf : groundFormulas) {
+            List<Integer> parentFormulaId = gf.parentFormulaId;
+            List<Integer> numCopies = gf.numCopies;
+            double effWeight = 0.0;
+            if (!parentFormulaId.isEmpty()) {
+                for (int i = 0; i < parentFormulaId.size(); i++) {
+                    int formulaId = parentFormulaId.get(i);
+                    List<Double> doubWeight = new ArrayList<>();
+                    for (int j = 0; j < gf.numConnections.get(formulaId).size(); j++) {
+                        doubWeight.add(mln.formulas.get(formulaId).weight.getValue());
+                    }
+                    effWeight += numCopies.get(i) * VecOperations.dotprod(doubWeight, Aggregator.aggregator(gf.numConnections.get(formulaId)));
+                }
+                gf.weight = new LogDouble(effWeight, true);
+            }
+            else
+                gf.weight = new LogDouble(mln.softEvidenceLambda * gf.originalWeight.getValue(), true);
+        }
     }
 }

@@ -48,21 +48,27 @@ public class LearnArgs {
     public boolean queryEvidence;
     @Parameter(names="-useMlnWts", description = "If specified, initialize weights with MLN weights", order = 16)
     public boolean useMlnWts;
-    @Parameter(names="-dMinllChange", description = "convergence criteria for discriminative learning", order = 17)
-    public double dMinllChange = 0.001;
-    @Parameter(names="-dNumIter", description = "Max Number of learning iterations for discriminative learning", order = 18)
-    public int dNumIter = 100;
     @Parameter(names="-method", description = "Method Name (cg/lbfgs)", order = 19)
     public String method = "cg";
     @Parameter(names="-pll", description = "If specified, use neg pseudo log likelihood as loss function", order = 20)
     public boolean pll = false;
+    @Parameter(names="-usePrior", description = "If specified, use prior gaussian distribution", order = 21)
+    public boolean usePrior = false;
     @Parameter(names="-debug", description = "If specified, prints weights and gradient at every iteration", order = 19)
     public boolean debug;
+    @Parameter(names="-agg", description = "If specified, use aggregator method", order = 2)
+    public boolean agg;
     /**
      * @see GibbsParamConverter
      */
     @Parameter(names="-infer", description = "Inference arguments provided between double quotes", converter = GibbsParamConverter.class)
-    public GibbsParams gibbsParam;
+    public GibbsParams gibbsParam = new GibbsParams();
+
+    /**
+     * @see CGParamsConverter
+     */
+    @Parameter(names="-cg", description = "cg params provided between double quotes", converter = CGParamsConverter.class)
+    public CGParams cgParam = new CGParams();
 
     /**
      * To print final values of parameters after parsing.
@@ -83,11 +89,11 @@ public class LearnArgs {
                 "-numEMSamples = " + numEMSamples + "\n"+
                 "-queryEvidence = " + queryEvidence + "\n"+
                 "-useMlnWts = " + useMlnWts + "\n"+
-                "-numIter = " + dNumIter + "\n"+
-                "-dMinllChange = " + dMinllChange + "\n"+
                 "-method = " + method + "\n" +
                 "-pll = " + pll + "\n" +
-                "-debug = " + debug + "\n"
+                "-debug = " + debug + "\n" +
+                "-agg = " + agg + "\n" +
+                "-usePrior = " + usePrior + "\n"
                 ;
     }
 
@@ -156,8 +162,14 @@ public class LearnArgs {
     public static class GibbsParamConverter implements IStringConverter<GibbsParams>{
         @Parameter(names="-numChains", description = "Number of chains in gibbs sampling")
         public int numChains = 10;
-        @Parameter(names="-numSamples", description = "Number of samples per pred per chain")
-        public int numSamples = 100;
+        @Parameter(names="-maxSteps", description = "Max Number of samples per pred per chain")
+        public int maxSteps = 100;
+        @Parameter(names="-samplesPerTest", description = "Number of samples after which check for convergence")
+        public int samplesPerTest = 10;
+        @Parameter(names="-burnMaxSteps", description = "Max Number of samples per pred per chain for burning")
+        public int burnMaxSteps = 10;
+        @Parameter(names="-testConvergence", description = "If specified, test for convergence")
+        public boolean testConvergence = true;
 
         /**
          * We created jc as static member here because we need to use it in above class LearnArgs when printing usage manual.
@@ -183,9 +195,65 @@ public class LearnArgs {
             jc.parse(args);
 
             GibbsParams gibbsparams = new GibbsParams();
-            gibbsparams.numChains = numChains;
-            gibbsparams.samplesPerTest = numSamples;
+            gibbsparams.numChains = ((GibbsParamConverter)jc.getObjects().get(0)).numChains;
+            gibbsparams.maxSteps = ((GibbsParamConverter)jc.getObjects().get(0)).maxSteps;
+            gibbsparams.samplesPerTest = ((GibbsParamConverter)jc.getObjects().get(0)).samplesPerTest;
+            gibbsparams.burnMaxSteps = ((GibbsParamConverter)jc.getObjects().get(0)).burnMaxSteps;
+            gibbsparams.testConvergence = ((GibbsParamConverter)jc.getObjects().get(0)).testConvergence;
             return gibbsparams;
+        }
+    }
+
+    /**
+     * This class is created for parsing the argument after -cg flag.
+     * After -cg flag, user must give arguments for CG in double quotes.
+     * This class reads those arguments and create a single cgParam object storing those arguments.
+     */
+
+    public static class CGParamsConverter implements IStringConverter<CGParams>{
+        @Parameter(names="-lambda", description = "Initial Lambda for CG")
+        public double lambda = 100.0;
+        @Parameter(names="-maxLambda", description = "Max Lambda for CG")
+        public double maxLambda = Double.MAX_VALUE;
+        @Parameter(names="-maxBackTracks", description = "Max Lambda for CG")
+        public int maxBackTracks = 1000;
+        @Parameter(names="-preCondition", description = "If specified do preconditioning")
+        public boolean preCondition = true;
+        @Parameter(names="-minllChange", description = "convergence criteria for CG")
+        public double minllChange = 0.001;
+        @Parameter(names="-numIter", description = "max number of iterations")
+        public int numIter = 100;
+
+        /**
+         * We created jc as static member here because we need to use it in above class LearnArgs when printing usage manual.
+         */
+
+        public static JCommander jc = JCommander.newBuilder().addObject(new CGParamsConverter()).build();
+
+        /**
+         * This function will automatically gets called by above class's jc.parse() method when it tries to parse
+         * arguments after -cg. It receives a single string (in double quotes).
+         * @param s String in double quotes in which all cg parameters are given
+         * @return CGParams object with fields set according to parameters given
+         */
+        @Override
+        public CGParams convert(String s) throws ParameterException{
+            // Remove double quotes
+            s = s.replaceAll("\"","");
+
+            // Create args array by splitinng arguments
+            String args[] = s.split("\\s+");
+            jc.setProgramName("-cg");
+
+            jc.parse(args);
+            CGParams cgParams = new CGParams();
+            cgParams.cg_lambda = ((CGParamsConverter)jc.getObjects().get(0)).lambda;
+            cgParams.cg_max_lambda = ((CGParamsConverter)jc.getObjects().get(0)).maxLambda;
+            cgParams.maxBackTracks = ((CGParamsConverter)jc.getObjects().get(0)).maxBackTracks;
+            cgParams.preConditionCG = ((CGParamsConverter)jc.getObjects().get(0)).preCondition;
+            cgParams.numIter = ((CGParamsConverter)jc.getObjects().get(0)).numIter;
+            cgParams.min_ll_change = ((CGParamsConverter)jc.getObjects().get(0)).minllChange;
+            return cgParams;
         }
     }
 }

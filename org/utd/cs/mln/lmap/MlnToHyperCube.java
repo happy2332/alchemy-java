@@ -446,6 +446,7 @@ public class MlnToHyperCube {
                         }
 
                         // Finally join two atoms and get result in finalAtom
+                        System.out.println("formula = " + formula);
                         joinAtomsCommonVars(atom1, atom, atom1CommonTermIndices, atomCommonTermIndices, finalAtom);
                         // check if finalatom's hypercube is not empty
                         if(finalAtom.hyperCubes.isEmpty())

@@ -27,16 +27,12 @@ public abstract class WeightLearner {
     // softEvidencePerPredPerVal[d][gp][val]
     List<Map<Integer, List<Double>>> softEvidencePerPredPerVal;
 
-    // priorLambda is lambda for weight regularization. For each weight, there can be different lambda. If an entry of prior
-    // is zero, it means there is no regularization on that corresponding weight.
-    // priorMeans and priorStdDevs are the mean and standard deviation vectors for gaussian prior. Note that standard
-    // deviation is a vector here, meaning its a diagonal matrix.
-    // By default, priorMeans = 0, and priorStdDevs = 1, in that case, gaussian prior is just l2 regularization.
-    double [] priorLambda, priorMeans, priorStdDevs;
     public int domain_cnt, numWts;
     public boolean priorSoftEvidence;
     public int numFormulas;
     public boolean withEM;
+    public LearnArgs learnArgs;
+
     /**
      * Constructor : Initializes the fields
      * @param mlnsParam List of MLNs of size number of databases. All MLNs are same except for domains for predicates.
@@ -44,6 +40,7 @@ public abstract class WeightLearner {
     public WeightLearner(List<MLN> mlnsParam, List<GroundMLN> groundMlnsParam, List<GroundMLN> groundMlnsEMParam,
                          List<Evidence> truthsParam, List<Evidence> truthsEMParam, LearnArgs lArgs) throws FileNotFoundException {
 
+        learnArgs = lArgs;
         withEM = lArgs.withEM;
         //create states
         states = new ArrayList<>();
@@ -64,11 +61,6 @@ public abstract class WeightLearner {
             numWts++;
         }
         weights = new double[numWts];
-        priorMeans = new double[numWts];
-        priorStdDevs = new double[numWts];
-        Arrays.fill(priorStdDevs,2.0);
-        priorLambda = new double[numWts];
-        Arrays.fill(priorLambda,1.0);
 
         if(priorSoftEvidence){
             weights[numWts-1] = lArgs.seLambda;
@@ -126,11 +118,6 @@ public abstract class WeightLearner {
 //        }
 //        return prior;
 //    }
-
-    public void setPriorLambda()
-    {
-        Arrays.fill(priorLambda, 0.0);
-    }
 
     /**
      * Write output MLN file with learned weights.

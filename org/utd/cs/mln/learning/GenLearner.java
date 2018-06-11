@@ -21,17 +21,7 @@ import java.util.Map;
  */
 public class GenLearner extends WeightLearner{
 
-    // For each domain d, for each ground predicate gp in that d, for each first order formula f in which gp appears,
-    // stores number of satisfied groundings of f for each possible value val of gp.
-    // satCounts[d][gp][f][val]
-    private List<Map<Integer, Map<Integer, List<Integer>>>> satCounts;
-
-    // For each domain d, stores number of ground atoms for each first order predicate p.
-    // predToNumGndingsMap[d][p]
-    private List<Map<String, Integer>> predToNumGndingsMap;
     private boolean genLearnDebug = false;
-
-    private double []gradient;
     private long time;
     private boolean isPll = false;
     private String method = "cg";
@@ -61,7 +51,7 @@ public class GenLearner extends WeightLearner{
         time = System.currentTimeMillis();
         setMLNWeights();
         if (isPll) {
-            loss = new PseudoLogLikelihood(states);
+            loss = new PseudoLogLikelihood(states, learnArgs.usePrior);
         } else {
             //TODO : get loss for likelihood
         }
@@ -130,7 +120,9 @@ public class GenLearner extends WeightLearner{
         };
         LBFGS.Params p = new LBFGS.Params();
         p.m = 5;
-        p.epsilon = 1.0E-3D;
+        p.epsilon = 1E-5D;
+        p.max_iterations = 100;
+        System.out.println("epsion : " + p.epsilon);
 //            p.past = 5;
 //            p.delta = 1.0E-7D;
 

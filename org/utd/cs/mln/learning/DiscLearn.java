@@ -1,38 +1,40 @@
 package org.utd.cs.mln.learning;
 
+import org.utd.cs.gm.utility.Timer;
 import org.utd.cs.mln.alchemy.core.*;
+import org.utd.cs.mln.alchemy.util.ConditionalLogLikelihood;
 import org.utd.cs.mln.inference.GibbsParams;
 import org.utd.cs.mln.inference.GibbsSampler_v3;
 import org.utd.cs.mln.inference.Inference;
 
 import java.io.FileNotFoundException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.BitSet;
-import java.util.HashMap;
 import java.util.List;
 
 /**
  * Created by Happy on 4/11/18.
  */
 public class DiscLearn extends WeightLearner {
-    private List<Inference> inferences;
-    private double[] gradient;
+    private boolean isPll = false;
+    private String method = "cg";
+    public List<Inference> inferences, inferencesEM;
     private long time;
 
     // for each domain d, for each first order formula f, stores number of true groundings according to domain d.
-    // formulaTrainCnts[d][f]. If priorSoftEvidence, last entry is trainCnt for lambda
-    private double[][] formulaTrainCnts;
+    // formulaTrainCnts[d][f]. If priorSoftEvidence, last entry is trainCnt for lambda, which is sum(w_i), where
+    // i indexes over all softevidence ground formulas which are satisfied in the training data.
+    // This is used for finding gradient.
+    public double[][] formulaTrainCnts;
 
-    // for each domain d, for each first order formula f, stores expected true groundings according to domain d.
-    // formulaInferedCnts[d][f]. If priorSoftEvidence, last entry is for lambda
-    private double[][] formulaInferedCnts;
+//    // for each domain d, for each first order formula f, stores number of total groundings according to domain d.
+//    // formulaNumGndings[d][f]
+//    // This is used for setting lambda of prior. lambda for prior determines weightage of the prior. Higher the number of
+//    // groundings of a formula,
+//    private double[][] formulaNumGroundings;
 
-    // for each domain d, for each first order formula f, stores number of total groundings according to domain d.
-    // formulaNumGndings[d][f]
-    private double[][] formulaNumGroundings;
-
-    //max number of learning iterations
-    private int numIter;
+    private boolean dldebug = false;
 
     /**
      * Constructor : Initializes the fields
@@ -43,116 +45,100 @@ public class DiscLearn extends WeightLearner {
     public DiscLearn(List<MLN> mlnsParam, List<GroundMLN> groundMlnsParam, List<GroundMLN> groundMlnsEMParam,
                      List<Evidence> truthsParam, List<Evidence> truthsEMParam, LearnArgs lArgs) throws FileNotFoundException {
         super(mlnsParam, groundMlnsParam, groundMlnsEMParam, truthsParam, truthsEMParam, lArgs);
-        init(groundMlnsParam, truthsParam, groundMlnsEMParam, truthsEMParam, lArgs);
+        if(lArgs.debug)
+            dldebug = true;
+        isPll = lArgs.pll;
+        method = lArgs.method;
+        init();
     }
 
-    private void init(List<GroundMLN> groundMlnsParam, List<Evidence> truthsParam, List<GroundMLN> groundMlnsEMParam, List<Evidence> truthsEMParam, LearnArgs lArgs)
+    private void init()
     {
         //assign memory to all data members here
         inferences = new ArrayList<>();
-        gradient = new double[numWts];
+        if(withEM)
+            inferencesEM = new ArrayList<>();
         formulaTrainCnts = new double[domain_cnt][numWts];
-        formulaInferedCnts = new double[domain_cnt][numWts];
-        formulaNumGroundings = new double[domain_cnt][numWts];
-
         // Initialize required data members here
         for (int i = 0; i < domain_cnt; i++) {
-            GibbsParams gibbsparams = new GibbsParams();
-            Inference inference = new GibbsSampler_v3(states.get(i),-1,true, priorSoftEvidence, gibbsparams);
+            GibbsParams gibbsparams = new GibbsParams(learnArgs.gibbsParam);
+            Inference inference = new GibbsSampler_v3(states.get(i),-1,true, true, priorSoftEvidence, gibbsparams, false);
             inferences.add(inference);
+            if(withEM)
+            {
+                Inference inferenceEM = new GibbsSampler_v3(statesEM.get(i), -1, true, true, priorSoftEvidence, gibbsparams, false);
+                inferencesEM.add(inferenceEM);
+            }
         }
-
-        numIter = lArgs.dNumIter;
     }
 
     @Override
     public void learnWeights() {
         time = System.currentTimeMillis();
+
+        if(method.equals("cg"))
+        {
+            learnByCG();
+        }
+        else
+        {
+            //TODO : learnByLBFGS
+        }
         if(!withEM)
             findFormulaTrainCnts();
-
-        // Start learning weights
-        for (int iter = 0; iter < numIter; iter++) {
-            // At the start of every iteration, set MLN weight to weights learned till now. In case of first iteration,
-            // this will be initial weights which are assigned in weights array.
-            setMLNWeights();
-
-            // Also set weight for every ground formula according to new MLN weights set
-            setGroundMLNWeights();
-
-            // Now find gradient
-            findAndSetGradient();
-        }
-
     }
 
-    private void setGroundMLNWeights() {
-        for (int i = 0; i < domain_cnt; i++) {
-            State state = inferences.get(i).state;
-            state.groundMLN.setGroundFormulaWtsToSumOfParentWts(state.mln);
+    private void learnByCG() {
+        CGParams cgParams = new CGParams(learnArgs.cgParam);
+        ConjugateGradient cg = new ConjugateGradient(cgParams, numWts);
+        if(!isPll)
+        {
+            ConditionalLogLikelihood cllLoss = new ConditionalLogLikelihood(inferences, inferencesEM, withEM, learnArgs.usePrior, learnArgs.agg);
+            if(!withEM)
+            {
+                findFormulaTrainCnts();
+                cllLoss.formulaTrainCnts = formulaTrainCnts;
+            }
+            time = System.currentTimeMillis();
+            // Start learning weights
+            for (int iter = 1; iter <= cg.numIter; iter++) {
+                System.out.println("ITER : " + iter);
+                // At the start of every iteration, set MLN weight to weights learned till now.
+                // We need this because later we want to set weights of ground formulas according to weights learned
+                // of first order formulas, which are set according to MLN weights. In case of first iteration,
+                // this will be initial weights which are assigned in weights array.
+                setMLNWeights();
+
+                // Also set weight for every ground formula according to new MLN weights set
+                setGroundMLNWeights();
+
+                // Now find gradient and fill gradient field.
+                double gradient[] = cllLoss.getGradient(weights);
+
+                int status = cg.updateWts(weights, gradient, inferences, inferencesEM, iter, withEM, cllLoss);
+                if(status == -1)
+                    break;
+                if (cg.backtracked) {
+                    iter--;
+
+                }
+                else{
+                    // If we are backtracking, then we DON'T want to reset formulaCounts as we want more samples to add on.
+                    for (int i = 0; i < domain_cnt; i++) {
+                        inferences.get(i).resetCnts();
+                        if(withEM)
+                            inferencesEM.get(i).resetCnts();
+                    }
+                }
+                System.out.println("ELAPSED TIME : " + Timer.time((System.currentTimeMillis() - time)/1000.0));
+            }
         }
     }
 
     /**
-     * This method computes gradient of log likelihood of data and fills in with gradient field. Note that we want
-     * to minimize neg log likelihood, so gradient of that will be negative of this computed gradient.
-     * g[i] = (n_i - E[n_i]) - reg[i], where n_i is number of true groundings of ith formula in training data,
-     * E[n_i] is expected number of true groundings of ith formula, where expectation is over P(y|x),
-     * and reg[i] comes from regularization, which is priorLambda[i]*(weights[i] - priorMeans[i])/priorStdDev[i].
-     * n_i is stored in formulaTrainCnts[i]
-     * To find E[n_i], run inference, and store results in formulaInferedCnts i.e. E[n_i] is formulaInferedCnts[i].
+     * This method fills in {@link DiscLearn#formulaTrainCnts}.
      */
-    private void findAndSetGradient()
-    {
-        // For finding gradient, we need to do inference first so that we can calculate expected true counts.
-        //infer(inferences, formulaInferedCnts);
-
-        // for each domain, calculate gradient, and then add them up.
-        for (int domainId = 0; domainId < domain_cnt; domainId++) {
-
-        }
-    }
-
-//    /**
-//     * This method runs inference for all domains in parallel, and then fills in formulaInferedCntsParam
-//     * @param inferencesParam List of inference objects over which inference is to be done
-//     * @param formulaInferedCntsParam Fill infered counts in this 2D array
-//     */
-//    private void infer(List<Inference> inferencesParam, double [][] formulaInferedCntsParam) {
-//        InferPerDomain inferPerDomain;
-//        Thread t[] = new Thread[domain_cnt];
-//        MLN mln = inferencesParam.get(0).state.mln;
-//        Thread.currentThread().setPriority(10);
-//        for (int i = 0; i < domain_cnt; i++) {
-//            State state = inferences.get(i).state;
-//            if(priorSoftEvidence) {
-//                state.groundMLN.setGroundFormulaWtsToParentWts(mln, weights[numFormulas]);
-//            } else {
-//                state.groundMLN.setGroundFormulaWtsToParentWts(mln);
-//            }
-//            inferences.get(i).updateWtsForNextGndPred(0);
-//            ipmln = new InferPerMLN(inferences.get(i), burningIn, isInit);
-//            t[i] = new Thread(ipmln);
-//            t[i].setPriority(1);
-//        }
-//
-//        try {
-//            for (int i = 0; i < domain_cnt; ++i){
-//                System.out.println("Doing inference for domain " + i);
-//                t[i].start();
-//            }
-//            System.out.println("Waiting for threads to finish.");
-//            Thread.currentThread().setPriority(1);
-//            for (int i = 0; i < domain_cnt; ++i){
-//                t[i].join();
-//            }
-//            Thread.currentThread().setPriority(10);
-//        } catch (InterruptedException e) {
-//            System.out.println("Main thread Interrupted");
-//        }
-//    }
-
-    private void findFormulaTrainCnts() {
+    public void findFormulaTrainCnts() {
         for (int i = 0; i < domain_cnt; i++) {
             GroundMLN gm = inferences.get(i).state.groundMLN;
             for(GroundFormula gf : gm.groundFormulas)
@@ -182,14 +168,30 @@ public class DiscLearn extends WeightLearner {
                     if(isFormulaSatisfied) {
                         formulaTrainCnts[i][parentFormulaId.get(j)] += numCopies.get(j);
                     }
-                    formulaNumGroundings[i][parentFormulaId.get(j)] += numCopies.get(j);
+                    //formulaNumGroundings[i][parentFormulaId.get(j)] += numCopies.get(j);
                 }
                 if(isFormulaSatisfied && parentFormulaId.isEmpty())
                 {
                     formulaTrainCnts[i][numWts-1] += gf.originalWeight.getValue();
                 }
-
             }
         }
     }
+
+
+    private void setGroundMLNWeights() {
+        for (int i = 0; i < domain_cnt; i++) {
+            State state = inferences.get(i).state;
+            if(learnArgs.agg)
+            {
+                //state.groundMLN.setNumConnections();
+                state.groundMLN.setEffWts(state.mln);
+            }
+            else
+            {
+                state.groundMLN.setGroundFormulaWtsToSumOfParentWts(state.mln);
+            }
+        }
+    }
+
 }

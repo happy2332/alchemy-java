@@ -1,10 +1,14 @@
 package org.utd.cs.mln.inference;
 
 import org.utd.cs.gm.utility.Timer;
+import org.utd.cs.mln.alchemy.core.GroundFormula;
+import org.utd.cs.mln.alchemy.core.GroundMLN;
+import org.utd.cs.mln.alchemy.core.GroundPredicate;
 import org.utd.cs.mln.alchemy.core.State;
 import org.utd.cs.mln.alchemy.util.ConvergenceTest;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -32,34 +36,43 @@ public class GibbsSampler_v3 extends MCMC{
     // Convergence test for sampling
     private ConvergenceTest[] gibbsConvergenceTests;
 
-    private boolean isInitDone = false;
-
     /**
      * Constructor: User-set parameters are set.
-     * @see MCMC#MCMC(State, int, boolean, boolean, MCMCParams)
+     * @see MCMC#MCMC(State, int, boolean, boolean, boolean, MCMCParams, boolean)
      */
-    public GibbsSampler_v3(State state, int seed, boolean trackFormulaTrueCnts, boolean priorSoftEvidence, GibbsParams gibbsParams) {
-        super(state, seed, trackFormulaTrueCnts, priorSoftEvidence, gibbsParams);
+    public GibbsSampler_v3(State state, int seed, boolean trackFormulaTrueCnts, boolean saveAllCounts, boolean priorSoftEvidence, GibbsParams gibbsParams, boolean calculateMarginal) {
+        super(state, seed, trackFormulaTrueCnts, saveAllCounts, priorSoftEvidence, gibbsParams, calculateMarginal);
         // User-set parameters
         this.gamma = gibbsParams.gamma;
         this.epsilonError = gibbsParams.epsilonError;
         this.fracConverged = gibbsParams.fracConverged;
         this.testConvergence = gibbsParams.testConvergence;
         this.samplesPerTest = gibbsParams.samplesPerTest;
+        init();
     }
 
     @Override
     void init() {
-        initTruthValsAndSatTrueLits();
         if(mcmcdebug)
             System.out.println("initializing Gibbs sampling randomly");
         randomInitializeTruthVals();
         initializeNumSatValues();
-        initNumValPerChainPerPred();
+        findMarkovBlankets();
         // Initialize convergence test
         int numGndPreds = state.groundMLN.indexToGroundPredMap.size();
         initConvergenceTests(gamma, epsilonError, numGndPreds, numChains);
-        isInitDone = true;
+    }
+
+    private void findMarkovBlankets() {
+        GroundMLN groundMln = state.groundMLN;
+        for(GroundFormula gf : groundMln.groundFormulas)
+        {
+            for(int gpId : gf.groundPredIndices)
+            {
+                GroundPredicate gp = groundMln.indexToGroundPredMap.get(gpId);
+                gp.markovBlanketSet.addAll(gf.groundPredIndices);
+            }
+        }
     }
 
     /**
@@ -78,20 +91,17 @@ public class GibbsSampler_v3 extends MCMC{
     }
 
     @Override
-    void infer() {
-        // If not initialized, initialize the data structures
-        if(!isInitDone)
-            init();
+    public void infer() {
         // Burn-in only if burnMaxSteps positive
         boolean burningIn = (burnMaxSteps > 0) ? true : false;
 
-        // If keeping track of true clause groundings, then init to zero
-        if(trackFormulaTrueCnts)
-        {
-            for (int clauseId = 0; clauseId < formulaTrueCnts.length; clauseId++) {
-                formulaTrueCnts[clauseId] = 0;
-            }
-        }
+//        // If keeping track of true clause groundings, then init to zero
+//        if(trackFormulaTrueCnts)
+//        {
+//            for (int clauseId = 0; clauseId < formulaTrueCnts.length; clauseId++) {
+//                formulaTrueCnts[clauseId] = 0;
+//            }
+//        }
         ArrayList<Integer> affectedGndPredIndices = new ArrayList<>();
         affectedGndPredIndices.addAll(state.groundMLN.indexToGroundPredMap.keySet());
 
@@ -103,23 +113,23 @@ public class GibbsSampler_v3 extends MCMC{
         System.out.println("Running Gibbs Sampling...");
 
         // Sampling loop
-        int sample = 0;
         int numSamplesPerChainPerPred = 0;
         boolean done = false;
         long time = System.currentTimeMillis();
         double secondsElapsed = 0;
         while(!done)
         {
-            ++sample;
-            if(sample % samplesPerTest == 0)
+            ++numSamplesPerChainPerPred;
+            if(numSamplesPerChainPerPred % samplesPerTest == 0)
             {
                 secondsElapsed = (System.currentTimeMillis() - time) / 1000.0;
-                System.out.println("Sample (per pred per chain) : " + sample + ", Elapsed Time : " + Timer.time(secondsElapsed));
+                System.out.println("Sample (per pred per chain) : " + numSamplesPerChainPerPred + ", Elapsed Time : " + Timer.time(secondsElapsed));
             }
-
+            if(numSamplesPerChainPerPred == 4000)
+            {
+                System.out.println("hello...");
+            }
             performGibbsStepForAllChains(burningIn);
-
-            if (!burningIn) numSamplesPerChainPerPred++;
 
 
             // Add current truth values to the convergence testers
@@ -137,7 +147,7 @@ public class GibbsSampler_v3 extends MCMC{
                 g++;
             }
 
-            if (sample % samplesPerTest != 0) continue;
+            if (numSamplesPerChainPerPred % samplesPerTest != 0) continue;
 
             if (burningIn)
             {
@@ -148,33 +158,33 @@ public class GibbsSampler_v3 extends MCMC{
                 if (testConvergence)
                     burnConverged =
                             GelmanConvergenceTest.checkConvergenceOfAll(burnConvergenceTests, state.groundMLN.indexToGroundPredMap.size(), true);
-                if ( (sample >= burnMinSteps && burnConverged)
-                        || (burnMaxSteps >= 0 && sample >= burnMaxSteps)
+                if ( (numSamplesPerChainPerPred >= burnMinSteps && burnConverged)
+                        || (burnMaxSteps >= 0 && numSamplesPerChainPerPred >= burnMaxSteps)
                         || (maxSeconds > 0 && secondsElapsed >= maxSeconds))
                 {
-                    System.out.println("Done burning. " + sample + " samples per pred per chain");
+                    System.out.println("Done burning. " + numSamplesPerChainPerPred + " samples per pred per chain");
                     if (testConvergence)
                     {
                         System.out.println(" (" + (burnConverged? "converged":"didn't converge")
-                                +" at total of " + numChains*sample + " samples per pred)");
+                                +" at total of " + numChains*numSamplesPerChainPerPred + " samples per pred)");
                     }
                     burningIn = false;
-                    sample = 0;
+                    numSamplesPerChainPerPred = 0;
                 }
             }
 
             else
-            {  // Doing actual gibbs sampling
+            {  // Convergence test for actual gibbs sampling
                 boolean gibbsConverged = false;
 
                 if (testConvergence)
-                    gibbsConverged = ConvergenceTest.checkConvergenceOfAtLeast(gibbsConvergenceTests, state.groundMLN.indexToGroundPredMap.size(), sample, fracConverged, true);
+                    gibbsConverged = ConvergenceTest.checkConvergenceOfAtLeast(gibbsConvergenceTests, state.groundMLN.indexToGroundPredMap.size(), numSamplesPerChainPerPred, fracConverged, true);
 
-                if (   (sample >= minSteps && gibbsConverged)
-                        || (maxSteps >= 0 && sample >= maxSteps)
+                if (   (numSamplesPerChainPerPred >= minSteps && gibbsConverged)
+                        || (maxSteps >= 0 && numSamplesPerChainPerPred >= maxSteps)
                         || (maxSeconds > 0 && secondsElapsed >= maxSeconds))
                 {
-                    System.out.println("Done Gibbs sampling. " + sample
+                    System.out.println("Done Gibbs sampling. " + numSamplesPerChainPerPred
                             + " samples per pred per chain");
                     if (testConvergence)
                     {
@@ -186,17 +196,56 @@ public class GibbsSampler_v3 extends MCMC{
             }
         }
         System.out.println("Time taken for Gibbs sampling : "+Timer.time((System.currentTimeMillis() - time) / 1000.0));
-        // update gndPreds probability
-        for (int c = 0; c < numChains; c++) {
-            for (Integer g : numValPerChainPerPred_.get(c).keySet()) {
-                for(int val = 0 ; val < numValPerChainPerPred_.get(c).get(g).size() ; val++)
+
+        if(calculateMarginal)
+        {
+            // update gndPreds probability
+            for (Integer g : state.groundMLN.indexToGroundPredMap.keySet()) {
+                int numVals = state.groundMLN.indexToGroundPredMap.get(g).numPossibleValues;
+                for(int val = 0 ; val < numVals; val++)
                 {
-                    double p = numValPerChainPerPred_.get(c).get(g).get(val)/numSamplesPerChainPerPred;
-                    numValPerChainPerPred_.get(c).get(g).set(val,p);
+                    double marginal = 0.0;
+                    for (int c = 0; c < numChains; c++) {
+                        marginal += numValPerChainPerPred_.get(c).get(g).get(val)/numSamplesPerChainPerPred;
+                    }
+                    marginal /= numChains;
+                    numValPerPred_.get(g).set(val,marginal);
                 }
             }
         }
+        if(trackFormulaTrueCnts)
+        {
+            int totalSamples = allFormulaTrueCntsPerChain.get(0).size();
+            if(saveAllCounts)
+            {
+                int numCounts = formulaTrueCnts.length;
+                int startSample = allFormulaTrueCnts.size();
+                for (int sample = startSample; sample < totalSamples; sample++) {
+                    allFormulaTrueCnts.add(new ArrayList<>(Collections.nCopies(numCounts,0.0)));
+                    int size = allFormulaTrueCnts.size();
+                    for (int formulaId = 0; formulaId < numCounts; formulaId++) {
+                        double totalCount = 0.0;
+                        for (int chainIdx = 0; chainIdx < numChains; chainIdx++) {
+                            totalCount += allFormulaTrueCntsPerChain.get(chainIdx).get(sample).get(formulaId)/numChains;
+                        }
+                        allFormulaTrueCnts.get(size-1).set(formulaId, totalCount);
+                    }
+                }
+            }
 
+            Arrays.fill(formulaTrueCnts, 0.0);
+            Arrays.fill(formulaTrueSqCnts, 0.0);
+
+            for (int sampleNum = 0; sampleNum < allFormulaTrueCnts.size() ; sampleNum++) {
+                int numWts = allFormulaTrueCnts.get(sampleNum).size();
+                for (int formulaId = 0; formulaId < numWts; formulaId++) {
+                    double trueCntsInASample = allFormulaTrueCnts.get(sampleNum).get(formulaId);
+                    formulaTrueCnts[formulaId] += trueCntsInASample/totalSamples;
+                    formulaTrueSqCnts[formulaId] += (trueCntsInASample * trueCntsInASample)/totalSamples;
+                }
+            }
+
+        }
     }
 
     private void performGibbsStepForAllChains(boolean burningIn) {
@@ -265,15 +314,25 @@ public class GibbsSampler_v3 extends MCMC{
      */
     int performGibbsStep(int chainIdx, int gpId)
     {
-        updateWtsForGndPred(chainIdx,gpId);
+//        if(gpIdsToBeChanged.get(chainIdx).contains(gpId)) {
+//            updateWtsForGndPred(chainIdx, gpId);
+//            gpIdsToBeChanged.get(chainIdx).remove(gpId);
+//        }
+        updateWtsForGndPred(chainIdx, gpId);
         int assignment = get_probabilistic_assignment(wtsPerPredPerVal.get(chainIdx).get(gpId));
         int prev_assignment = truthValues[chainIdx].get(gpId);
         truthValues[chainIdx].put(gpId, assignment);
         if(assignment != prev_assignment)
         {
             updateSatCounts(chainIdx, gpId, assignment, prev_assignment);
+            //updateToBeChanged(chainIdx, gpId);
         }
         return assignment;
+    }
+
+    private void updateToBeChanged(int chainIdx, int gpId) {
+        GroundPredicate gp = state.groundMLN.indexToGroundPredMap.get(gpId);
+        gpIdsToBeChanged.get(chainIdx).addAll(gp.markovBlanketSet);
     }
 
     private class GibbsPerChain implements Runnable{
@@ -293,5 +352,15 @@ public class GibbsSampler_v3 extends MCMC{
                 updateTrueCnts(chainIdx);
             }
         }
+    }
+
+    @Override
+    public void resetCnts() {
+        super.resetCnts();
+        randomInitializeTruthVals();
+        initializeNumSatValues();
+        // Initialize convergence test
+        int numGndPreds = state.groundMLN.indexToGroundPredMap.size();
+        initConvergenceTests(gamma, epsilonError, numGndPreds, numChains);
     }
 }

@@ -14,11 +14,13 @@ public class GroundClause {
     public LogDouble weight;
     public int formulaId; // id of groundformula of which this is a part
     public boolean isSatisfied;
+    public List<Integer> allGroundPreds;
 
     public GroundClause() {
         groundPredIndices = new ArrayList<>();
         globalToLocalPredIndex = new HashMap<>();
         grounPredBitSet = new ArrayList<>();
+        allGroundPreds = new ArrayList<>();
         weight = LogDouble.ZERO;
         isSatisfied = false;
         formulaId = 0;

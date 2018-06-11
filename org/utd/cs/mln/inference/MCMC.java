@@ -14,17 +14,17 @@ import java.util.*;
  */
 public abstract class MCMC extends Inference {
     // No. of chains which MCMC will use
-    int numChains;
+    public int numChains;
     // Min. no. of burn-in steps MCMC will take per chain
-    int burnMinSteps;
+    public int burnMinSteps;
     // Max. no. of burn-in steps MCMC will take per chain
-    int burnMaxSteps;
+    public int burnMaxSteps;
     // Min. no. of sampling steps MCMC will take per chain
-    int minSteps;
+    public int minSteps;
     // Max. no. of sampling steps MCMC will take per chain
-    int maxSteps;
+    public int maxSteps;
     // Max. no. of seconds MCMC should run
-    int maxSeconds;
+    public int maxSeconds;
 
     boolean mcmcdebug = true;
 
@@ -34,6 +34,8 @@ public abstract class MCMC extends Inference {
     // Num. of satisfying literals in each chain for each ground formula for each ground clause
     // numSatLiterals[chain][formula][clause]
     List<List<List<Integer>>> numSatLiterals;
+
+    List<Set<Integer>> gpIdsToBeChanged;
 
     // For each chain, For each formula, set of clauseIds which are false in this truthVals configuration
     // falseClausesSet[chain][formula][
@@ -47,33 +49,50 @@ public abstract class MCMC extends Inference {
     // wtsPerPredVal[c][g][val]
     List<Map<Integer, List<Double>>> wtsPerPredPerVal;
 
+    // For each chain c, allFormulaTrueCntsPerChain[c][i][j] is the number of true groundings of jth formula in ith sample
+    List<List<List<Double>>> allFormulaTrueCntsPerChain;
+
+    // allFormulaTrueCnts[i][j] is the number of true groundings of jth formula in ith sample
+    // oldAllFormulaTrueCnts[i][j] is the number of true groundings of jth formula in ith sample in the previous iter of learning
+    public List<List<Double>> allFormulaTrueCnts, oldAllFormulaTrueCnts;
+
+    // Whether to save all counts for each sample
+    boolean saveAllCounts;
+
+
+
     /**
      * Constructor: User-set parameters are set.
-     * @see Inference#Inference(State, int, boolean, boolean)
+     * @see Inference#Inference(State, int, boolean, boolean, boolean)
      */
-    public MCMC(State state, int seed, boolean trackFormulaTrueCnts, boolean priorSoftEvidence, MCMCParams params) {
-        super(state, seed, trackFormulaTrueCnts, priorSoftEvidence);
+    public MCMC(State state, int seed, boolean trackFormulaTrueCnts, boolean saveAllCounts, boolean priorSoftEvidence, MCMCParams params, boolean calculateMarginal) {
+        super(state, seed, trackFormulaTrueCnts, priorSoftEvidence, calculateMarginal);
         this.numChains = params.numChains;
         this.burnMinSteps = params.burnMinSteps;
         this.burnMaxSteps = params.burnMaxSteps;
         this.minSteps = params.minSteps;
         this.maxSteps = params.maxSteps;
         this.maxSeconds = params.maxSeconds;
-    }
+        this.saveAllCounts = saveAllCounts;
 
-    /**
-     * Allocates memory to all truthValues, numSatLiterals, falseClauseSet and wtsPerPredPerVal
-     */
-    void initTruthValsAndSatTrueLits() {
         truthValues = new Map[numChains];
         numSatLiterals = new ArrayList<>();
-        wtsPerPredPerVal = new ArrayList<>();
+        gpIdsToBeChanged = new ArrayList<>();
         falseClausesSet = new ArrayList<>();
+        numValPerChainPerPred_ = new ArrayList<>();
+        wtsPerPredPerVal = new ArrayList<>();
+        allFormulaTrueCntsPerChain = new ArrayList<>();
+        allFormulaTrueCnts = new ArrayList<>();
+        oldAllFormulaTrueCnts = new ArrayList<>();
+
         int numFormulas = state.groundMLN.groundFormulas.size();
         for (int c = 0; c < numChains; c++) {
             numSatLiterals.add(new ArrayList<List<Integer>>());
+            gpIdsToBeChanged.add(new HashSet<Integer>());
             wtsPerPredPerVal.add(new HashMap<Integer, List<Double>>());
             falseClausesSet.add(new ArrayList<Set<Integer>>());
+            numValPerChainPerPred_.add(new HashMap<Integer, List<Double>>());
+            allFormulaTrueCntsPerChain.add(new ArrayList<List<Double>>());
             for (int formulaId = 0; formulaId < numFormulas; formulaId++) {
                 int numClauses = state.groundMLN.groundFormulas.get(formulaId).groundClauses.size();
                 numSatLiterals.get(c).add(new ArrayList<>(Collections.nCopies(numClauses,0)));
@@ -83,9 +102,102 @@ public abstract class MCMC extends Inference {
             for (GroundPredicate gp : state.groundMLN.groundPredToIntegerMap.keySet()) {
                 int gpId = state.groundMLN.groundPredToIntegerMap.get(gp);
                 truthValues[c].put(gpId, 0);
-                wtsPerPredPerVal.get(c).put(gpId, new ArrayList<Double>(Collections.nCopies(gp.numPossibleValues,0.0)));
+                int numPossibleVals = gp.numPossibleValues;
+                numValPerChainPerPred_.get(c).put(gpId, new ArrayList<>(Collections.nCopies(numPossibleVals,0.0)));
+                wtsPerPredPerVal.get(c).put(gpId, new ArrayList<Double>(Collections.nCopies(numPossibleVals,0.0)));
             }
         }
+
+    }
+
+//    /**
+//     * Allocates memory to all datamembers of MCMC : truthValues, numSatLiterals, falseClauseSet, numValPerChainPerPred_,
+//     * wtsPerPredPerVal, formulaTrueCntsPerChain, formulaTrueSqCntsPerChain, and allFormulaTrueCntsPerChain.
+//     */
+//    void init() {
+//        truthValues = new Map[numChains];
+//        numSatLiterals = new ArrayList<>();
+//        falseClausesSet = new ArrayList<>();
+//        numValPerChainPerPred_ = new ArrayList<>();
+//        wtsPerPredPerVal = new ArrayList<>();
+//        allFormulaTrueCntsPerChain = new ArrayList<>();
+//        allFormulaTrueCnts = new ArrayList<>();
+//        oldAllFormulaTrueCnts = new ArrayList<>();
+//        formulaTrueCntsPerChain = new double[numChains][numWts];
+//        formulaTrueSqCntsPerChain = new double[numChains][numWts];
+//
+//        int numFormulas = state.groundMLN.groundFormulas.size();
+//        for (int c = 0; c < numChains; c++) {
+//            numSatLiterals.add(new ArrayList<List<Integer>>());
+//            wtsPerPredPerVal.add(new HashMap<Integer, List<Double>>());
+//            falseClausesSet.add(new ArrayList<Set<Integer>>());
+//            numValPerChainPerPred_.add(new HashMap<Integer, List<Double>>());
+//            allFormulaTrueCntsPerChain.add(new ArrayList<List<Double>>());
+//            for (int formulaId = 0; formulaId < numFormulas; formulaId++) {
+//                int numClauses = state.groundMLN.groundFormulas.get(formulaId).groundClauses.size();
+//                numSatLiterals.get(c).add(new ArrayList<>(Collections.nCopies(numClauses,0)));
+//                falseClausesSet.get(c).add(new HashSet<Integer>());
+//            }
+//            truthValues[c] = new HashMap<>();
+//            for (GroundPredicate gp : state.groundMLN.groundPredToIntegerMap.keySet()) {
+//                int gpId = state.groundMLN.groundPredToIntegerMap.get(gp);
+//                truthValues[c].put(gpId, 0);
+//                int numPossibleVals = gp.numPossibleValues;
+//                numValPerChainPerPred_.get(c).put(gpId, new ArrayList<>(Collections.nCopies(numPossibleVals,0.0)));
+//                wtsPerPredPerVal.get(c).put(gpId, new ArrayList<Double>(Collections.nCopies(numPossibleVals,0.0)));
+//            }
+//        }
+//    }
+
+    /**
+     * Computes Hessian vector product. Hessian is approximated from the matrix allFormulaTrueCnts.
+     * @param v vector to which Hessian is to be multiplied
+     * @return resultant vector
+     */
+    public double[] getHessianVectorProduct(double[] v) {
+        // For minimizing the negative log likelihood,
+        // the ith element of H v is:
+        //   E[n_i * vn] - E[n_i] E[vn]
+        // where n is the vector of all clause counts
+        // and vn is the dot product of v and n.
+
+        double sumVN = 0;
+        double []sumN = new double[numWts];
+        double []sumNiVN = new double[numWts];
+
+        // Get sufficient statistics from each sample,
+        // so we can compute expectations
+        int numSamples = allFormulaTrueCnts.size();
+        for (int s = 0; s < numSamples; s++)
+        {
+            List<Double> n1 = allFormulaTrueCnts.get(s);
+
+            // Compute v * n
+            double vn = 0;
+
+            for (int i = 0; i < numWts; i++)
+                vn += v[i] * n1.get(i);
+
+            // Tally v*n, n_i, and n_i v*n
+            sumVN += vn;
+            for (int i = 0; i < numWts; i++)
+            {
+                sumN[i]    += n1.get(i);
+                sumNiVN[i] += n1.get(i) * vn;
+            }
+        }
+
+        // Compute actual product from the sufficient stats
+        double []product = new double[numWts];
+        for (int formulano = 0; formulano < numWts; formulano++)
+        {
+            double E_vn = sumVN/numSamples;
+            double E_ni = sumN[formulano]/numSamples;
+            double E_nivn = sumNiVN[formulano]/numSamples;
+            product[formulano] = E_nivn - E_ni * E_vn;
+        }
+
+        return product;
     }
 
     /**
@@ -141,24 +253,6 @@ public abstract class MCMC extends Inference {
                 falseClausesSet.get(c).set(formulaId, falseClauseIds);
             }// end of formula
         }
-    }
-
-    /**
-     * Initializes structure for holding number of times a predicate was set
-     * to each value.
-     */
-    void initNumValPerChainPerPred()
-    {
-        numValPerChainPerPred_ = new ArrayList<>();
-        for (int chainIdx = 0; chainIdx < numChains; chainIdx++) {
-            numValPerChainPerPred_.add(new HashMap<Integer, List<Double>>());
-            for (GroundPredicate gp : state.groundMLN.groundPredToIntegerMap.keySet()) {
-                int numPossibleVals = gp.numPossibleValues;
-                int gpId = state.groundMLN.groundPredToIntegerMap.get(gp);
-                numValPerChainPerPred_.get(chainIdx).put(gpId, new ArrayList<>(Collections.nCopies(numPossibleVals,0.0)));
-            }
-        }
-
     }
 
     public void updateWtsForGndPreds(List<Integer> affectedGndPredIndices, int chainIndex) {
@@ -347,21 +441,19 @@ public abstract class MCMC extends Inference {
      */
     void updateTrueCnts(int chainIdx)
     {
-        int numCounts = formulaTrueCnts.length;
         double []numTrueGndings = getNumTrueGndingsFromTruthVals(truthValues[chainIdx]);
+        int numWts = numTrueGndings.length;
         if(saveAllCounts)
         {
-            allFormulaTrueCnts.add(new ArrayList<Double>(Collections.nCopies(numCounts,0.0)));
+            allFormulaTrueCntsPerChain.get(chainIdx).add(new ArrayList<Double>(Collections.nCopies(numWts,0.0)));
         }
-        for (int i = 0; i < numCounts; i++) {
+        for (int i = 0; i < numWts; i++) {
+            int size = allFormulaTrueCntsPerChain.get(chainIdx).size();
             if(saveAllCounts)
             {
-                allFormulaTrueCnts.get(numSamples).set(i, numTrueGndings[i]);
+                allFormulaTrueCntsPerChain.get(chainIdx).get(size-1).set(i, numTrueGndings[i]);
             }
-            formulaTrueCnts[i] += numTrueGndings[i];
-            formulaTrueSqCnts[i] += numTrueGndings[i]*numTrueGndings[i];
         }
-        numSamples++;
     }
 
     private double[] getNumTrueGndingsFromTruthVals(Map<Integer, Integer> truthValues)
@@ -410,14 +502,90 @@ public abstract class MCMC extends Inference {
             int numVals = state.groundMLN.indexToGroundPredMap.get(g).numPossibleValues;
             for(int val = 0 ; val < numVals ; val++)
             {
-                double marginal = 0.0;
-                for (int c = 0; c < numChains; c++) {
-                    marginal += numValPerChainPerPred_.get(c).get(g).get(val);
-                }
-                double marginal_prob = marginal/numChains;
-                writer.printf(state.groundMLN.indexToGroundPredMap.get(g) + "=" + val + " %.4f\n",marginal_prob);
+                writer.printf(state.groundMLN.indexToGroundPredMap.get(g) + "=" + val + " %.4f\n",numValPerPred_.get(g).get(val));
             }
         }
     }
 
+    @Override
+    /**
+     * Reset all data structures before starting inference
+     */
+    public void resetCnts(){
+        super.resetCnts();
+        truthValues = new Map[numChains];
+        numSatLiterals = new ArrayList<>();
+        falseClausesSet = new ArrayList<>();
+        numValPerChainPerPred_ = new ArrayList<>();
+        wtsPerPredPerVal = new ArrayList<>();
+        allFormulaTrueCntsPerChain = new ArrayList<>();
+        allFormulaTrueCnts = new ArrayList<>();
+
+        int numFormulas = state.groundMLN.groundFormulas.size();
+        for (int c = 0; c < numChains; c++) {
+            numSatLiterals.add(new ArrayList<List<Integer>>());
+            wtsPerPredPerVal.add(new HashMap<Integer, List<Double>>());
+            falseClausesSet.add(new ArrayList<Set<Integer>>());
+            numValPerChainPerPred_.add(new HashMap<Integer, List<Double>>());
+            allFormulaTrueCntsPerChain.add(new ArrayList<List<Double>>());
+            for (int formulaId = 0; formulaId < numFormulas; formulaId++) {
+                int numClauses = state.groundMLN.groundFormulas.get(formulaId).groundClauses.size();
+                numSatLiterals.get(c).add(new ArrayList<>(Collections.nCopies(numClauses,0)));
+                falseClausesSet.get(c).add(new HashSet<Integer>());
+            }
+            truthValues[c] = new HashMap<>();
+            for (GroundPredicate gp : state.groundMLN.groundPredToIntegerMap.keySet()) {
+                int gpId = state.groundMLN.groundPredToIntegerMap.get(gp);
+                truthValues[c].put(gpId, 0);
+                int numPossibleVals = gp.numPossibleValues;
+                numValPerChainPerPred_.get(c).put(gpId, new ArrayList<>(Collections.nCopies(numPossibleVals,0.0)));
+                wtsPerPredPerVal.get(c).put(gpId, new ArrayList<Double>(Collections.nCopies(numPossibleVals,0.0)));
+            }
+        }
+    }
+
+    /**
+     * If we are storing all counts, then restore all counts from old counts
+     */
+    public void restoreCnts() {
+        if (!saveAllCounts)
+            return;
+
+        //resetCnts();
+        allFormulaTrueCnts.clear();;
+        System.out.println("Restoring counts...");
+        if(trackFormulaTrueCnts){
+            for (int i = 0; i < oldAllFormulaTrueCnts.size(); i++)
+            {
+                allFormulaTrueCnts.add(new ArrayList<Double>());
+                int numcounts = oldAllFormulaTrueCnts.get(i).size();
+                for (int j = 0; j < numcounts; j++)
+                {
+                    allFormulaTrueCnts.get(i).add(oldAllFormulaTrueCnts.get(i).get(j));
+//                    formulaTrueCnts[j] += allFormulaTrueCnts.get(i).get(j);
+//                    formulaTrueSqCnts[j] += allFormulaTrueCnts.get(i).get(j) * allFormulaTrueCnts.get(i).get(j);
+                }
+            }
+        }
+    }
+
+    /**
+     * If we are storing all counts, save current all counts to old all counts
+     */
+    public void saveToOldCnts() {
+        if (!saveAllCounts)
+            return;
+        oldAllFormulaTrueCnts.clear();
+        if(trackFormulaTrueCnts){
+            for (int i = 0; i < allFormulaTrueCnts.size(); i++)
+            {
+                oldAllFormulaTrueCnts.add(new ArrayList<Double>());
+                int numcounts = allFormulaTrueCnts.get(i).size();
+                for (int j = 0; j < numcounts; j++)
+                {
+                    oldAllFormulaTrueCnts.get(i).add(allFormulaTrueCnts.get(i).get(j));
+                }
+            }
+        }
+    }
 }

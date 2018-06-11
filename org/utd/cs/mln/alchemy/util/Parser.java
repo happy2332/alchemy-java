@@ -588,7 +588,7 @@ public class Parser {
         throw new PredicateNotFound("wrong predicate in evidence");
     }
 
-    public Evidence parseEvidence(GroundMLN groundMln, String evidence_file) throws FileNotFoundException {
+    public Evidence parseEvidence(GroundMLN groundMln, String evidence_file, Set<String> predsToParse) throws FileNotFoundException {
         Evidence evidence = new Evidence();
         if(evidence_file == null)
             return evidence;
@@ -601,6 +601,8 @@ public class Parser {
             }
             String[] predArr = line.split(REGEX_ESCAPE_CHAR + LEFTPRNTH);
             String symbolName = predArr[0];
+            if(!predsToParse.contains(symbolName))
+                continue;
             String[] predArr2 = predArr[1].split(EQUALSTO);
             String value = predArr2[1];
             String[] termNames = predArr2[0].replace(RIGHTPRNTH, "").split(COMMASEPARATOR);

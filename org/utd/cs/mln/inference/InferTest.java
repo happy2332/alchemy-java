@@ -38,11 +38,11 @@ public class InferTest {
         closedWorldPreds.removeAll(queryPreds);
 
         boolean isgroundwithhypercube = true;
-        GroundMLN groundMln = null;
-        Evidence gold = null;
+        GroundMLN groundMln;
+        Evidence gold;
         long time = System.currentTimeMillis();
         Map<GroundPredicate, Integer> groundPredicateIntegerMap = new HashMap<>();
-        Set<String> queryClusterPreds = new HashSet<String>(queryPreds);
+        Set<String> queryClusterPreds = new HashSet<>(queryPreds);
         queryClusterPreds.add("st");
         List<GroundPredicate> groundPredicates = fgm.createGroundPredicates(mln, groundPredicateIntegerMap, queryClusterPreds);
         if(isgroundwithhypercube)
@@ -61,21 +61,30 @@ public class InferTest {
             }
             System.out.println("Creating MRF...");
             groundMln = fgm.groundWithHyperCubes(hyperCubeMLN, groundPredicates, groundPredicateIntegerMap);
-            groundMln.setGroundFormulaWtsToSumOfParentWts(mln);
-            Evidence evidence = parser.parseEvidence(groundMln, iArgs.evidFile);
+            if(iArgs.agg)
+            {
+                groundMln.setNumConnections();
+                groundMln.setEffWts(mln);
+            }
+            else
+            {
+                groundMln.setGroundFormulaWtsToSumOfParentWts(mln);
+            }
+
+            Evidence evidence = parser.parseEvidence(groundMln, iArgs.evidFile, queryClusterPreds);
             fgm.removeEvidenceGroundPreds(groundMln, evidence);
-            gold = parser.parseEvidence(groundMln, iArgs.goldFile);
+            gold = parser.parseEvidence(groundMln, iArgs.goldFile, queryPreds);
         }
 
         else
         {
             groundMln = fgm.ground(mln, groundPredicates, groundPredicateIntegerMap);
-            Evidence evidence = parser.parseEvidence(groundMln, iArgs.evidFile);
+            Evidence evidence = parser.parseEvidence(groundMln, iArgs.evidFile, evidPreds);
             Set<String> hiddenPreds = new HashSet<>();
 //        Map<Integer, List<Integer>> featureVectors = fgm.getFeatureVectors(groundMln, mln.formulas.size(), evidence, "person", varTypeToDomain.get("person"), false);
 //        writeFeatures(featureVectors,5,100);
 
-            gold = parser.parseEvidence(groundMln, iArgs.goldFile);
+            gold = parser.parseEvidence(groundMln, iArgs.goldFile, queryPreds);
 //            System.out.println("Total number of ground formulas (before handling evidence): " + groundMln.groundFormulas.size());
             groundMln = fgm.handleEvidence(groundMln, evidence, gold, evidPreds, queryPreds, hiddenPreds, false, iArgs.queryEvidence);
 
@@ -99,20 +108,15 @@ public class InferTest {
         System.out.println("Time taken to ground MLN : "+Timer.time((System.currentTimeMillis() - time) / 1000.0));
         State state = new State(mln, groundMln);
         state.setTruthVals(gold);
-        GibbsParams gibbsparams = new GibbsParams();
-        Inference inference = new GibbsSampler_v3(state,-1,false,false,gibbsparams);
+        GibbsParams gibbsparams = new GibbsParams(iArgs.gibbsParam);
+        Inference inference = new GibbsSampler_v3(state,-1,false,false, false,gibbsparams, true);
         PrintWriter writer = null;
-        try{
-            writer = new PrintWriter(new FileOutputStream(iArgs.outFile));
-        }
-        catch (IOException e) {
-        }
+        writer = new PrintWriter(new FileOutputStream(iArgs.outFile));
 //        gs.infer(true, true);
 //        gs.writeMarginal(writer);
         //inference.writeNetwork(writer);
         //PseudoLogLikelihood pll = new PseudoLogLikelihood(state);
         //System.out.println("pll : "+pll.getPseudoLogLikelihood());
-        inference.init();
         inference.infer();
         inference.writeProbs(writer);
         writer.close();

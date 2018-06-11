@@ -20,15 +20,12 @@ public class PseudoLogLikelihood extends Loss{
     List<State> states;
     boolean pllDebug = false;
 
-    // priorLambda is lambda for weight regularization. For each weight, there can be different lambda. If an entry of prior
-    // is zero, it means there is no regularization on that corresponding weight.
-    // priorMeans and priorStdDevs are the mean and standard deviation vectors for gaussian prior. Note that standard
-    // deviation is a vector here, meaning its a diagonal matrix.
-    // By default, priorMeans = 0, and priorStdDevs = 1, in that case, gaussian prior is just l2 regularization.
-    double [] priorLambda, priorMeans, priorStdDevs;
 
-    public PseudoLogLikelihood(List<State> statesParam){
+    public PseudoLogLikelihood(List<State> statesParam, boolean usePrior){
+        super();
         init(statesParam);
+        if(usePrior)
+            Arrays.fill(priorLambda, 1.0);
     }
     //TODO : Implement c'tor for EM also
 
@@ -42,23 +39,20 @@ public class PseudoLogLikelihood extends Loss{
      */
     public void init(List<State> statesParam){
         this.states = statesParam;
+        int numWts = states.get(0).mln.formulas.size();
+        if(states.get(0).mln.priorSoftEvidence)
+        {
+            numWts++;
+        }
+        super.init(numWts);
         satCounts = new ArrayList<>();
         predToNumGndingsMap = new ArrayList<>();
         int domain_cnt = states.size();
         for (int i = 0; i < domain_cnt; i++) {
             predToNumGndingsMap.add(new HashMap<String,Integer>());
         }
-        int numWts = states.get(0).mln.formulas.size();
-        if(states.get(0).mln.priorSoftEvidence)
-        {
-            numWts++;
-        }
+
         gradient = new double[numWts];
-        priorMeans = new double[numWts];
-        priorStdDevs = new double[numWts];
-        Arrays.fill(priorStdDevs,2.0);
-        priorLambda = new double[numWts];
-        Arrays.fill(priorLambda,0.0);
         createPredToNumGndingsMap();
         long time = System.currentTimeMillis();
         countSatVals();
@@ -290,11 +284,14 @@ public class PseudoLogLikelihood extends Loss{
             for(int formulaId : satCountsPerDomainPerPred.keySet())
             {
                 double formulaWt = mln.formulas.get(formulaId).weight.getValue();
+//                if(formulaId == 4)
+//                    formulaWt /= 16.0;
                 List<Integer> satCountsPerDomainPerPredPerFormula = satCountsPerDomainPerPred.get(formulaId);
                 for (int val = 0; val < numPossibleVals; val++) {
                     int satCount = satCountsPerDomainPerPredPerFormula.get(val);
                     double oldVal = state.wtsPerPredPerVal.get(gpId).get(val);
-                    state.wtsPerPredPerVal.get(gpId).set(val, oldVal + satCount*formulaWt);
+                    double newVal = oldVal + satCount*formulaWt;
+                    state.wtsPerPredPerVal.get(gpId).set(val, newVal);
                 }
             }
             if(mln.priorSoftEvidence)
