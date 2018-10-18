@@ -4,6 +4,7 @@ import org.utd.cs.gm.core.LogDouble;
 import org.utd.cs.gm.utility.Pair;
 import org.utd.cs.mln.alchemy.util.Aggregator;
 import org.utd.cs.mln.alchemy.util.VecOperations;
+import org.utd.cs.mln.learning.LearnTest;
 
 import java.util.*;
 
@@ -129,7 +130,7 @@ public class GroundMLN {
         System.gc();
     }
 
-    public void setEffWts(MLN mln)
+    public void setEffWtsOld(MLN mln)
     {
         for(GroundFormula gf : groundFormulas) {
             List<Integer> parentFormulaId = gf.parentFormulaId;
@@ -143,6 +144,24 @@ public class GroundMLN {
                         doubWeight.add(mln.formulas.get(formulaId).weight.getValue());
                     }
                     effWeight += numCopies.get(i) * VecOperations.dotprod(doubWeight, Aggregator.aggregator(gf.numConnections.get(formulaId)));
+                }
+                gf.weight = new LogDouble(effWeight, true);
+            }
+            else
+                gf.weight = new LogDouble(mln.softEvidenceLambda * gf.originalWeight.getValue(), true);
+        }
+    }
+
+    public void setEffWts(MLN mln)
+    {
+        for(GroundFormula gf : groundFormulas) {
+            List<Integer> parentFormulaId = gf.parentFormulaId;
+            List<Integer> numCopies = gf.numCopies;
+            double effWeight = 0.0;
+            if (!parentFormulaId.isEmpty()) {
+                for (int i = 0; i < parentFormulaId.size(); i++) {
+                    int formulaId = parentFormulaId.get(i);
+                    effWeight += numCopies.get(i) * mln.formulas.get(formulaId).weight.getValue()/ LearnTest.firstOrderNumConnections.get(formulaId);
                 }
                 gf.weight = new LogDouble(effWeight, true);
             }

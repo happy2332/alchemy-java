@@ -1,6 +1,7 @@
 package org.utd.cs.mln.inference;
 
 import org.utd.cs.gm.utility.Timer;
+import org.utd.cs.mln.alchemy.core.GroundFormula;
 import org.utd.cs.mln.alchemy.core.State;
 
 import java.util.ArrayList;
@@ -131,15 +132,30 @@ public class MCSAT extends MCMC {
      */
     private void performMCSatStep(int chainIdx, boolean burningIn) {
         // For each ground formula, check if it is satisfied or not. It it is, add it to
-        // toBeSatisfiedFormulasPerChain list with some prob p.
+        // toBeSatisfiedFormulasPerChain list with some prob p = (1-e^-w)
         int numGroundFormulas = state.groundMLN.groundFormulas.size();
         for (int i = 0; i < numGroundFormulas; i++) {
+            GroundFormula gf = state.groundMLN.groundFormulas.get(i);
             // If this ground formula is already present in toBeSatisfiedFormulasPerChain, then
-            // no need to check for satisfiability, just add it with prob p
+            // no need to check for satisfiability, just add it with prob p, because in this state,
+            // all the formulas in toBeSatisfiedFormulasPerChain are already satisfied since this state
+            // comes from last sample sat step.
             if(toBeSatisfiedFormulasPerChain.get(chainIdx).contains(i))
             {
-                double p = 0.0;
+                double p = (1-Math.exp(-Math.abs(gf.weight.getValue())));
+                if(rand.nextDouble() < p)
+                    toBeSatisfiedFormulasPerChain.get(chainIdx).add(i);
             }
+            // Else check the satisfiability of this ground formula and if satisfied, add it
+            // with prob p
+            else if(gf.isSatisfied(truthValues[chainIdx]))
+            {
+                double p = (1-Math.exp(-Math.abs(gf.weight.getValue())));
+                if(rand.nextDouble() < p)
+                    toBeSatisfiedFormulasPerChain.get(chainIdx).add(i);
+            }
+            SampleSat ss = new SampleSat(state, toBeSatisfiedFormulasPerChain.get(chainIdx), truthValues[chainIdx]);
+            ss.performSampleSatStep();
         }
     }
 }

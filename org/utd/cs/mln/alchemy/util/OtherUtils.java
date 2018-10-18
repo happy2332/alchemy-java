@@ -51,6 +51,16 @@ public class OtherUtils {
         }
         return probabilities;
     }
+
+    /**
+     * Generates a random integer from 0 to n-1
+     */
+    public static int getUniformAssignment(int n) {
+        Random rand = new Random();
+        int r = rand.nextInt(n);
+        return r;
+    }
+
     public static void main(String args[])
     {
         List<Set<Integer>> myList = new ArrayList<>();

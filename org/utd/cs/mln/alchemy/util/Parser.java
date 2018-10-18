@@ -32,7 +32,7 @@ public class Parser {
 
 	private static final String REGEX_ESCAPE_CHAR = "\\";
     private List<String> truthEvidFiles;
-    public Set<String> queryPreds = new HashSet<>(), evidPreds = new HashSet<>();
+    public Set<String> queryPreds = new HashSet<>(), evidPreds = new HashSet<>(), hiddenPreds = new HashSet();
 
 
     public void collectDomain(List<String> files) throws FileNotFoundException {
@@ -137,6 +137,7 @@ public class Parser {
 		clause.satisfied = false;
 		clause.sign = sign;
 		clause.valTrue = valTrueList;
+		Set<Term> termsSet = new HashSet<>();
 		for(int i=0;i<numAtoms;i++)
 		{
 			PredicateSymbol symbol = MLN.create_new_symbol(mln.symbols.get(predicateSymbolIndex.get(i)));
@@ -146,8 +147,10 @@ public class Parser {
                 terms.get(j).type = new String(symbol.variable_types.get(j));
             }
 			Atom atom = new Atom(symbol,terms);
+			termsSet.addAll(terms);
 			clause.atoms.add(atom);
 		}
+		clause.terms = new ArrayList<>(termsSet);
 		return clause;
 	}
 
@@ -156,15 +159,18 @@ public class Parser {
                                        List<Integer> clausePartitionIndex, boolean tautology)
     {
         List<WClause> CNF = new ArrayList<WClause>();
+        Set<Term> termsSet = new HashSet<>();
         for(int i = 0 ; i < clausePartitionIndex.size()-1 ; i++)
         {
             int from = clausePartitionIndex.get(i);
             int to = clausePartitionIndex.get(i+1);
             WClause new_clause = create_new_clause(predicateSymbolIndex.subList(from,to), sign.subList(from,to), iTermsList.subList(from, to), valTrueList.subList(from,to));
             new_clause.weight = new LogDouble(weight, true);
+            termsSet.addAll(new_clause.terms);
             CNF.add(new_clause);
         }
         Formula formula = new Formula(CNF, new LogDouble(weight, true), tautology);
+        formula.terms = new ArrayList<>(termsSet);
         return formula;
     }
 
@@ -218,7 +224,7 @@ public class Parser {
             sign.add(false);
             predicateSymbolIndex.add(null);
         }
-        System.out.println("line = " + line);
+        //System.out.println("line = " + line);
         for(int i=0; i<atomStrings.size(); i++) {
             String[] atomStrings1 = atomStrings.get(i).split(REGEX_ESCAPE_CHAR + EQUALSTO);
             String atomString = atomStrings1[0];
@@ -414,7 +420,7 @@ public class Parser {
 	{
 		String[] predArr = line.split(REGEX_ESCAPE_CHAR + LEFTPRNTH);
 		String symbolName = predArr[0];
-		boolean isQuery = false, isEvidence = false;
+		boolean isQuery = false, isEvidence = false, isHidden = false;
 		if(symbolName.charAt(0) == '*')
         {
             isQuery = true;
@@ -431,6 +437,10 @@ public class Parser {
                 isQuery = true;
             }
         }
+        else
+        {
+            isHidden = true;
+        }
         symbolName = symbolName.replaceAll("[*@]","");
         if(isQuery)
         {
@@ -439,6 +449,10 @@ public class Parser {
         if(isEvidence)
         {
             evidPreds.add(symbolName);
+        }
+        if(isHidden)
+        {
+            hiddenPreds.add(symbolName);
         }
 		String[] predArr2 = predArr[1].split(EQUALSTO);
 		String valuesName = predArr2[1];
@@ -571,6 +585,8 @@ public class Parser {
     private FirstEvidence parseEvidenceString(String line) throws PredicateNotFound{
         String[] predArr = line.split(REGEX_ESCAPE_CHAR + LEFTPRNTH);
         String symbolName = predArr[0];
+        if(symbolName.contains(NOTOPERATOR))
+            throw new PredicateNotFound("! oprator not allowed in evidence...");
         String[] predArr2 = predArr[1].split(EQUALSTO);
         String value = predArr2[1];
         int truthVal = Integer.parseInt(value);
@@ -585,10 +601,11 @@ public class Parser {
                 return new FirstEvidence(MLN.create_new_symbol(symbol),values,truthVal);
             }
         }
+        System.out.println("line : "+line);
         throw new PredicateNotFound("wrong predicate in evidence");
     }
 
-    public Evidence parseEvidence(GroundMLN groundMln, String evidence_file, Set<String> predsToParse) throws FileNotFoundException {
+    public Evidence parseEvidence(GroundMLN groundMln, String evidence_file, Set<String> predsToParse) throws FileNotFoundException, PredicateNotFound {
         Evidence evidence = new Evidence();
         if(evidence_file == null)
             return evidence;
@@ -601,6 +618,8 @@ public class Parser {
             }
             String[] predArr = line.split(REGEX_ESCAPE_CHAR + LEFTPRNTH);
             String symbolName = predArr[0];
+            if(symbolName.contains(NOTOPERATOR))
+                throw new PredicateNotFound("! oprator not allowed in evidence...");
             if(!predsToParse.contains(symbolName))
                 continue;
             String[] predArr2 = predArr[1].split(EQUALSTO);
@@ -622,7 +641,9 @@ public class Parser {
                 gp.terms.add(Integer.parseInt(term));
             }
 
-            MyAssert.assume(groundMln.groundPredToIntegerMap.containsKey(gp));
+//            MyAssert.assume(groundMln.groundPredToIntegerMap.containsKey(gp));
+            if(!groundMln.groundPredToIntegerMap.containsKey(gp))
+                continue;
             int gpIndex = groundMln.groundPredToIntegerMap.get(gp);
             if(gpIndex == -1)
                 System.out.println("error in Parser::parseEvidence()");

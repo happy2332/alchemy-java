@@ -54,4 +54,20 @@ public class GroundFormula {
     public int hashCode() {
         return groundClauses.hashCode();
     }
+
+    // HACK : This function assumes there is only 1 clause in the formula
+    // truthValue key : gpId, value : truthvalue in a state
+    public boolean isSatisfied(Map<Integer, Integer> truthValue) {
+        GroundClause gc = groundClauses.get(0);
+        boolean isClauseSatisfied = false;
+        for(Integer gpId : gc.groundPredIndices)
+        {
+            BitSet b = gc.grounPredBitSet.get(gc.globalToLocalPredIndex.get(gpId));
+            int trueVal = truthValue.get(gpId);
+            isClauseSatisfied |= b.get(trueVal);
+            if(isClauseSatisfied)
+                return true;
+        }
+        return false;
+    }
 }

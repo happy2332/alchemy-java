@@ -1,3 +1,3 @@
 Manifest-Version: 1.0
-Main-Class: org.utd.cs.mln.alchemy.util.FeatureCreator
+Main-Class: org.utd.cs.mln.inference.InferTest
 

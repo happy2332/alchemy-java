@@ -43,7 +43,7 @@ public class LearnArgs {
     @Parameter(names="-withEm", description = "If specified, learn with EM", order = 12)
     public boolean withEM;
     @Parameter(names="-numEMSamples", description = "Number of samples in E step of EM (-withEM flag must be set)", order = 14)
-    public int numEMSamples = 10;
+    public int numEMSamples = 5;
     @Parameter(names="-queryEvidence", description = "If specified, make all query ground predicates not specified in training file as evidence)", order = 15)
     public boolean queryEvidence;
     @Parameter(names="-useMlnWts", description = "If specified, initialize weights with MLN weights", order = 16)
@@ -54,7 +54,7 @@ public class LearnArgs {
     public boolean pll = false;
     @Parameter(names="-usePrior", description = "If specified, use prior gaussian distribution", order = 21)
     public boolean usePrior = false;
-    @Parameter(names="-debug", description = "If specified, prints weights and gradient at every iteration", order = 19)
+    @Parameter(names="-debug", description = "If specified, prints gradient and counts at every iteration", order = 19)
     public boolean debug;
     @Parameter(names="-agg", description = "If specified, use aggregator method", order = 2)
     public boolean agg;

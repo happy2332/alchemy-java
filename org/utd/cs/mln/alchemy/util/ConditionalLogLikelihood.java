@@ -12,7 +12,7 @@ import java.util.List;
 public class ConditionalLogLikelihood extends Loss {
     private double []gradient;
     private List<Inference> inferences, inferencesEM;
-    private boolean cllDebug = false;
+    public boolean cllDebug = false;
     private int numWts;
     private int domain_cnt;
     public double[][] formulaTrainCnts;
@@ -62,9 +62,10 @@ public class ConditionalLogLikelihood extends Loss {
      */
     public double[] getGradient(double []weights) {
         // For finding gradient, we need to do inference first so that we can calculate expected true counts.
-        infer();
+        infer(inferences);
         Arrays.fill(gradient, 0.0);
-        System.out.println("formula\tActual Count\tInfered Count");
+        if(cllDebug)
+            System.out.println("formula\tActual Count\tInfered Count");
         for (int w = 0; w < numWts; w++) {
             for (int domainId = 0; domainId < domain_cnt; domainId++) {
                 gradient[w] += (inferences.get(domainId).formulaTrueCnts[w] - formulaTrainCnts[domainId][w]);
@@ -77,7 +78,8 @@ public class ConditionalLogLikelihood extends Loss {
                 }
                 double regularization = priorLambda[w]*(wt - priorMeans[w])/(priorStdDevs[w]*priorStdDevs[w]);
                 gradient[w] += regularization;
-                System.out.println(w + "\t" + formulaTrainCnts[domainId][w] + "\t" + inferences.get(domainId).formulaTrueCnts[w]);
+                if(cllDebug)
+                    System.out.println(w + "\t" + formulaTrainCnts[domainId][w] + "\t" + inferences.get(domainId).formulaTrueCnts[w]);
             }
             //double regularization = priorLambda[w]*(weights[w] - priorMeans[w])/(priorStdDevs[w]*priorStdDevs[w]);
             //gradient[w] += regularization;
@@ -89,7 +91,7 @@ public class ConditionalLogLikelihood extends Loss {
     /**
      * This method runs inference for all domains in parallel.
      */
-    private void infer() {
+    public void infer(List<Inference> inferences) {
         ConditionalLogLikelihood.InferPerDomain inferPerDomain;
         // Whether to run inference in parallel or not.
         boolean withThreads = true;
@@ -100,7 +102,7 @@ public class ConditionalLogLikelihood extends Loss {
             Thread t[] = new Thread[domain_cnt];
             Thread.currentThread().setPriority(10);
             for (int i = 0; i < domain_cnt; i++) {
-                inferPerDomain = new ConditionalLogLikelihood.InferPerDomain(i);
+                inferPerDomain = new ConditionalLogLikelihood.InferPerDomain(i, inferences);
                 t[i] = new Thread(inferPerDomain);
                 t[i].setPriority(1);
             }
@@ -123,7 +125,7 @@ public class ConditionalLogLikelihood extends Loss {
         else
         {
             for (int i = 0; i <domain_cnt ; i++) {
-                inferPerDomain = new InferPerDomain(i);
+                inferPerDomain = new InferPerDomain(i, inferences);
                 inferPerDomain.run();
             }
         }
@@ -131,9 +133,12 @@ public class ConditionalLogLikelihood extends Loss {
 
     private class InferPerDomain implements Runnable{
         private final int domainId;
+        private final List<Inference> inferences;
 
-        public InferPerDomain(int domainId) {
+        public InferPerDomain(int domainId, List<Inference> inferences)
+        {
             this.domainId = domainId;
+            this.inferences = inferences;
         }
 
         @Override

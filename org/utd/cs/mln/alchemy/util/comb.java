@@ -23,10 +23,11 @@ public class comb {
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub
 		System.out.println(findComb(10,5));
-		List<Integer> a = new ArrayList<>();
+		Set<Integer> a = new HashSet<>();
 		a.add(25);
 		a.add(50);
-		a.remove(1);
+		Set<Integer>b = (a);
+		b.remove(25);
 		System.out.println("a = " + a);
 		MyAssert.assume(a.size() == 0);
 	}

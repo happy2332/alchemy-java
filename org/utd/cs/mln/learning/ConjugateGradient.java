@@ -58,8 +58,12 @@ public class ConjugateGradient {
 
             // Real change is lower bound on actual change
             realdist = ArrayUtils.dotprod(gradient, dist);
-            System.out.println("pred*dist = " + preddist);
-            System.out.println("real*dist = " + realdist);
+            if(cgdebug)
+            {
+                System.out.println("pred*dist = " + preddist);
+                System.out.println("real*dist = " + realdist);
+            }
+
         }
 
         if(iter > 1) {
@@ -86,8 +90,8 @@ public class ConjugateGradient {
                 for (int i = 0; i < domain_cnt; i++)
                 {
                     ((GibbsSampler_v3)inferences.get(i)).restoreCnts();
-                    if(withEM)
-                        ((GibbsSampler_v3)inferencesEM.get(i)).restoreCnts();
+//                    if(withEM)
+//                        ((GibbsSampler_v3)inferencesEM.get(i)).restoreCnts();
                 }
 
                 backtracked = true;
@@ -103,8 +107,8 @@ public class ConjugateGradient {
             for (int i = 0; i < domain_cnt; i++)
             {
                 ((GibbsSampler_v3)inferences.get(i)).saveToOldCnts();
-                if(withEM)
-                    ((GibbsSampler_v3)inferencesEM.get(i)).saveToOldCnts();
+//                if(withEM)
+//                    ((GibbsSampler_v3)inferencesEM.get(i)).saveToOldCnts();
             }
 
             double preCond[] = new double[numWts];
@@ -112,13 +116,13 @@ public class ConjugateGradient {
             if(preConditionCG)
             {
                 double variance[] = getVariance(inferences, numWts);
-                if(withEM)
-                {
-                    double varianceEM[] = getVariance(inferencesEM, numWts);
-                    for (int i = 0; i < variance.length; i++) {
-                        variance[i] -= varianceEM[i];
-                    }
-                }
+//                if(withEM)
+//                {
+//                    double varianceEM[] = getVariance(inferencesEM, numWts);
+//                    for (int i = 0; i < variance.length; i++) {
+//                        variance[i] -= varianceEM[i];
+//                    }
+//                }
 
                 if(cgdebug)
                     System.out.println("variance : " + Arrays.toString(variance));
@@ -152,29 +156,30 @@ public class ConjugateGradient {
             for (int w = 0; w < numWts; w++) {
                 d[w] = -preCond[w] * gradient[w] + beta * oldd[w];
             }
-            System.out.println("Direction D = " + Arrays.toString(d));
+            if(cgdebug)
+                System.out.println("Direction D = " + Arrays.toString(d));
 
             double Hd[] = getHessianVectorProduct(inferences, d, cllLoss);
-            if(withEM)
-            {
-                double []HdEM = getHessianVectorProduct(inferencesEM,d, cllLoss);
-                for (int i = 0; i < Hd.length; i++) {
-                    Hd[i] -= HdEM[i];
-                }
-            }
+//            if(withEM)
+//            {
+//                double []HdEM = getHessianVectorProduct(inferencesEM,d, cllLoss);
+//                for (int i = 0; i < Hd.length; i++) {
+//                    Hd[i] -= HdEM[i];
+//                }
+//            }
             alpha = computeQuadraticStepLength(Hd, gradient);
             if (alpha < 0.0)
             {
                 for (int w = 0; w < numWts; w++)
                     d[w] = -preCond[w]*gradient[w];
                 Hd = getHessianVectorProduct(inferences, d, cllLoss);
-                if(withEM)
-                {
-                    double []HdEM = getHessianVectorProduct(inferencesEM, d, cllLoss);
-                    for (int i = 0; i < Hd.length; i++) {
-                        Hd[i] -= HdEM[i];
-                    }
-                }
+//                if(withEM)
+//                {
+//                    double []HdEM = getHessianVectorProduct(inferencesEM, d, cllLoss);
+//                    for (int i = 0; i < Hd.length; i++) {
+//                        Hd[i] -= HdEM[i];
+//                    }
+//                }
                 alpha = computeQuadraticStepLength(Hd, gradient);
             }
         }
@@ -217,9 +222,12 @@ public class ConjugateGradient {
             }
             delta_pred = getHessianVectorProduct(inferences, wchange, cllLoss);
             //TODO : delta pred for EM ?
-
-            System.out.println("weights = " + Arrays.toString(weights));
-            System.out.println("Avg weights = " + Arrays.toString(averageWeights));
+            System.out.println("formula\tWeights");
+            for (int w = 0; w < weights.length; w++) {
+                System.out.println(w + "\t" + weights[w]);
+            }
+            if(cgdebug)
+                System.out.println("Avg weights = " + Arrays.toString(averageWeights));
         }
         return 0;
     }
@@ -254,7 +262,6 @@ public class ConjugateGradient {
     }
 
     private double computeQuadraticStepLength(double[] hd, double gradient[]) {
-        int numWeights = d.length;
         // Compute step length using trust region approach
         double dHd = ArrayUtils.dotprod(d, hd);
         double dd = ArrayUtils.dotprod(d, d);

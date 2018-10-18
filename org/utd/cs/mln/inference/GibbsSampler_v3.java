@@ -57,23 +57,23 @@ public class GibbsSampler_v3 extends MCMC{
             System.out.println("initializing Gibbs sampling randomly");
         randomInitializeTruthVals();
         initializeNumSatValues();
-        findMarkovBlankets();
+        //findMarkovBlankets();
         // Initialize convergence test
         int numGndPreds = state.groundMLN.indexToGroundPredMap.size();
         initConvergenceTests(gamma, epsilonError, numGndPreds, numChains);
     }
 
-    private void findMarkovBlankets() {
-        GroundMLN groundMln = state.groundMLN;
-        for(GroundFormula gf : groundMln.groundFormulas)
-        {
-            for(int gpId : gf.groundPredIndices)
-            {
-                GroundPredicate gp = groundMln.indexToGroundPredMap.get(gpId);
-                gp.markovBlanketSet.addAll(gf.groundPredIndices);
-            }
-        }
-    }
+//    private void findMarkovBlankets() {
+//        GroundMLN groundMln = state.groundMLN;
+//        for(GroundFormula gf : groundMln.groundFormulas)
+//        {
+//            for(int gpId : gf.groundPredIndices)
+//            {
+//                GroundPredicate gp = groundMln.indexToGroundPredMap.get(gpId);
+//                gp.markovBlanketSet.addAll(gf.groundPredIndices);
+//            }
+//        }
+//    }
 
     /**
      * Initializes convergence tests for burning in and sampling.
@@ -330,10 +330,10 @@ public class GibbsSampler_v3 extends MCMC{
         return assignment;
     }
 
-    private void updateToBeChanged(int chainIdx, int gpId) {
-        GroundPredicate gp = state.groundMLN.indexToGroundPredMap.get(gpId);
-        gpIdsToBeChanged.get(chainIdx).addAll(gp.markovBlanketSet);
-    }
+//    private void updateToBeChanged(int chainIdx, int gpId) {
+//        GroundPredicate gp = state.groundMLN.indexToGroundPredMap.get(gpId);
+//        gpIdsToBeChanged.get(chainIdx).addAll(gp.markovBlanketSet);
+//    }
 
     private class GibbsPerChain implements Runnable{
         private final int chainIdx;

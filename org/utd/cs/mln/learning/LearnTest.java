@@ -11,6 +11,7 @@ import org.utd.cs.mln.inference.GibbsSampler_v2;
 import org.utd.cs.mln.lmap.MlnToHyperCube;
 
 import java.io.FileNotFoundException;
+import java.text.CollationElementIterator;
 import java.util.*;
 
 /**
@@ -27,16 +28,9 @@ public class LearnTest {
 
     public static void main(String []args) throws FileNotFoundException, CloneNotSupportedException, PredicateNotFound {
         long totaltime = System.currentTimeMillis();
-
         System.out.println("Parsing command line arguments...");
         LearnArgs lArgs = parseArgs(args);
         int numDb = lArgs.truthFiles.size();
-        //String filename = "/Users/Happy/phd/experiments/without/data/Imdb/mln/imdb_mln.txt";
-        //String evidence_files[] = "/Users/Happy/phd/experiments/without/data/Imdb/db/empty_file.txt".split(",");
-        //String train_files[] = "/Users/Happy/phd/experiments/without/data/Imdb/db/imdb.1_train.txt".split(",");
-        //String out_file = "/Users/Happy/phd/experiments/without/data/Imdb/results/imdb_results_out.txt";
-        //List<String> evidence_preds = Arrays.asList("".split(","));
-        //List<String> query_preds = Arrays.asList("actor,director,movie,workedUnder".split(","));;
 
         // Create required data structures
 
@@ -45,16 +39,21 @@ public class LearnTest {
 
         // List of truth evidence of size numDb.
         List<Evidence> truths = new ArrayList<>();
+        // List of truth evidence of size numDb.
+        List<Evidence> truthsEStep = new ArrayList<>();
+        // List of truth evidence of size numDb.
+        List<Evidence> truthsMStep = new ArrayList<>();
 
         // List of groundMlns of size numDb.
         List<GroundMLN> groundMlns = new ArrayList<>();
+        // List of groundMlns of size numDb.
+        List<GroundMLN> groundMlnsEStep = new ArrayList<>();
+        // List of groundMlns of size numDb.
+        List<GroundMLN> groundMlnsMStep = new ArrayList<>();
 
-        List<GibbsSampler_v2> inferences = new ArrayList<>();
-        List<GibbsSampler_v2> inferencesEM = new ArrayList<GibbsSampler_v2>();
-        Map<Integer, Integer>[] subtypeMaps = new Map[numDb];
-        Set<String> evidPreds = null, queryPreds = null, hiddenPreds = null;
-        Set<String> closedWorldPreds = new HashSet<>();
-
+        Set<String> evidPreds = null, queryPreds = null, hiddenPreds = null, queryPredsEStep = null, evidPredsEStep = null, queryPredsMStep = null, evidPredsMStep = null;
+        List<Map<Integer,Integer>> groundHiddenPredMapMToEStep = new ArrayList<>();
+        WeightLearner wl;
         for(int i = 0 ; i < numDb ; i++) {
             FullyGrindingMill fgm = new FullyGrindingMill();
             MLN mln = new MLN(lArgs.priorSoftEvidence);
@@ -65,9 +64,8 @@ public class LearnTest {
             files.add(lArgs.truthFiles.get(i));
             if(lArgs.evidenceFiles != null)
                 files.add(lArgs.evidenceFiles.get(i));
-            //TODO : for now, we send only truth file to collectDomain, otherwise send both truth and evidence.
-            // We assume that there is no new constant in evidence.
-            //Map<String, Set<Integer>> varTypeToDomain = parser.collectDomain(files);
+
+            // Set parser's truthEvidFiles. This is used for setting varTypeToDomain structure.
             parser.setTruthEvidFiles(files);
             parser.parseInputMLNFile(lArgs.mlnFile);
             // Need to set query and evidence predicates only once, they will be same for all DBs
@@ -75,119 +73,331 @@ public class LearnTest {
             {
                 evidPreds = parser.evidPreds;
                 queryPreds = parser.queryPreds;
-                closedWorldPreds.addAll(evidPreds);
-                closedWorldPreds.removeAll(queryPreds);
-                hiddenPreds = getHiddenPreds(parser, mln, lArgs, closedWorldPreds);
+                hiddenPreds = parser.hiddenPreds;
+                if(hiddenPreds.size() > 0 && !lArgs.withEM)
+                {
+                    throw new ParameterException("hidden Preds found in MLN : " + hiddenPreds + ", provide withEM flag!!!");
+                }
+                else if(lArgs.withEM && hiddenPreds.isEmpty())
+                {
+                    throw new ParameterException("Must provide hidden preds withEM!!!");
+                }
+                firstOrderNumConnections = new ArrayList<>(Collections.nCopies(mln.formulas.size(),0.0));
             }
 
-            Map<GroundPredicate, Integer> groundPredicateIntegerMap = new HashMap<>();
-            Set<String> queryClusterPreds = new HashSet<String>(queryPreds);
-            queryClusterPreds.add("st");
-            List<GroundPredicate> groundPredicates = fgm.createGroundPredicates(mln, groundPredicateIntegerMap, queryClusterPreds);
-            if(lArgs.pll)
+            List<FirstEvidence> evidList = parser.parseInputEvidenceFile(lArgs.evidenceFiles.get(i));
+            List<FirstEvidence> truthList = parser.parseInputEvidenceFile(lArgs.truthFiles.get(i));
+            MlnToHyperCube mlnToHyperCube = new MlnToHyperCube();
+            int origNumFormulas = mln.formulas.size();
+            if(lArgs.withEM)
             {
-                // This groundMLN will contain only list of groundPredicates, not groundformulas since we are not grounding MLN.
-                GroundMLN groundMLN = new GroundMLN();
+                FullyGrindingMill fgmEStep = new FullyGrindingMill();
+                FullyGrindingMill fgmMStep = new FullyGrindingMill();
+                queryPredsEStep = hiddenPreds;
+                evidPredsEStep = new HashSet<>();
+                evidPredsEStep.addAll(queryPreds);
+                evidPredsEStep.addAll(evidPreds);
+                List<FirstEvidence> evidListEStep = new ArrayList<>();
+                evidListEStep.addAll(evidList);
+                evidListEStep.addAll(truthList);
+                List<FirstEvidence> truthListEStep = new ArrayList<>();
+                HashMap<PredicateSymbol,ArrayList<ArrayList<HyperCube>>> predsHyperCubeHashMapEStep = mlnToHyperCube.createPredsHyperCube(evidListEStep, evidPredsEStep, truthListEStep, queryPredsEStep, mln, lArgs.queryEvidence);
+                // Create a copy of this mln without formulas. In that copy, we will add hypercube formulas.
+                MLN hyperCubeMLNEStep = mln.copyMLNWithoutformulas();
+                for(int formulaId = 0 ; formulaId < origNumFormulas ; formulaId++){
+                    hyperCubeMLNEStep.formulas.addAll(mlnToHyperCube.createFormulaHyperCube(mln.formulas.get(formulaId), predsHyperCubeHashMapEStep, false));
+                    if((formulaId+1)%10 == 0)
+                        System.out.println(formulaId+1 + " formulas done...");
+                }
+                // This is a reverse mapping from groundPredicates to their indices in global groundPredicates list. This
+                // mapping will be filled by following function call : fgm.createGroundPredicatesFromPredsHashMap
+                Map<GroundPredicate, Integer> groundPredicateIntegerMapEStep = new HashMap<>();
+                List<GroundPredicate> groundPredicatesEStep = fgmEStep.createGroundPredicatesFromPredsHashMap(predsHyperCubeHashMapEStep, groundPredicateIntegerMapEStep);
 
-                for (int gpId = 0; gpId< groundPredicates.size(); gpId++) {
-                    groundMLN.indexToGroundPredMap.put(gpId, groundPredicates.get(gpId));
+                queryPredsMStep = new HashSet<>();
+                queryPredsMStep.addAll(queryPreds);
+                queryPredsMStep.addAll(hiddenPreds);
+                evidPredsMStep = evidPreds;
+                List<FirstEvidence> truthListMStep = truthList;
+                List<FirstEvidence> evidListMStep = evidList;
+                HashMap<PredicateSymbol,ArrayList<ArrayList<HyperCube>>> predsHyperCubeHashMapMStep = mlnToHyperCube.createPredsHyperCube(evidListMStep, evidPredsMStep, truthListMStep, queryPredsMStep, mln, lArgs.queryEvidence);
+                // Create a copy of this mln without formulas. In that copy, we will add hypercube formulas.
+                MLN hyperCubeMLNMStep = mln.copyMLNWithoutformulas();
+                for(int formulaId = 0 ; formulaId < origNumFormulas ; formulaId++){
+                    hyperCubeMLNMStep.formulas.addAll(mlnToHyperCube.createFormulaHyperCube(mln.formulas.get(formulaId), predsHyperCubeHashMapMStep, false));
+                    if((formulaId+1)%10 == 0)
+                        System.out.println(formulaId+1 + " formulas done...");
                 }
-                groundMLN.groundPredToIntegerMap = groundPredicateIntegerMap;
-                groundMlns.add(groundMLN);
-                Evidence truth = parser.parseEvidence(groundMLN,lArgs.truthFiles.get(i), queryPreds);
-                truths.add(truth);
-                if(evidPreds.size()!=0)
+                // This is a reverse mapping from groundPredicates to their indices in global groundPredicates list. This
+                // mapping will be filled by following function call : fgm.createGroundPredicatesFromPredsHashMap
+                Map<GroundPredicate, Integer> groundPredicateIntegerMapMStep = new HashMap<>();
+                List<GroundPredicate> groundPredicatesMStep = fgmMStep.createGroundPredicatesFromPredsHashMap(predsHyperCubeHashMapMStep, groundPredicateIntegerMapMStep);
+                groundHiddenPredMapMToEStep.add(mapPredIdMStepToEStep(groundPredicateIntegerMapMStep, groundPredicateIntegerMapEStep, hiddenPreds));
+                if(lArgs.pll)
                 {
-                    Evidence evidence = parser.parseEvidence(groundMLN, lArgs.evidenceFiles.get(i), queryClusterPreds);
-                    reduceDomainByEvidence(mln, groundMLN, evidence);
-                    fgm.removeEvidenceGroundPreds(groundMLN, evidence);
+                    // This groundMLN will contain only list of groundPredicates, not groundformulas since we are not grounding MLN.
+                    GroundMLN groundMLNEStep = new GroundMLN();
+
+                    for (int gpId = 0; gpId< groundPredicatesEStep.size(); gpId++) {
+                        groundMLNEStep.indexToGroundPredMap.put(gpId, groundPredicatesEStep.get(gpId));
+                    }
+                    groundMLNEStep.groundPredToIntegerMap = groundPredicateIntegerMapEStep;
+                    groundMlnsEStep.add(groundMLNEStep);
+                    Evidence truthEStep = new Evidence();
+                    truthsEStep.add(truthEStep);
+
+                    // This groundMLN will contain only list of groundPredicates, not groundformulas since we are not grounding MLN.
+                    GroundMLN groundMLNMStep = new GroundMLN();
+
+                    for (int gpId = 0; gpId< groundPredicatesMStep.size(); gpId++) {
+                        groundMLNMStep.indexToGroundPredMap.put(gpId, groundPredicatesMStep.get(gpId));
+                    }
+                    groundMLNMStep.groundPredToIntegerMap = groundPredicateIntegerMapMStep;
+                    groundMlnsMStep.add(groundMLNMStep);
+                    Evidence truthMStep = parser.parseEvidence(groundMLNMStep,lArgs.truthFiles.get(i), queryPredsMStep);
+                    truthsMStep.add(truthMStep);
+//                if(evidPreds.size()!=0)
+//                {
+//                    Evidence evidence = parser.parseEvidence(groundMLN, lArgs.evidenceFiles.get(i), queryClusterPreds);
+//                    reduceDomainByEvidence(mln, groundMLN, evidence);
+//                    fgm.removeEvidenceGroundPreds(groundMLN, evidence);
+//                }
                 }
+
+                else
+                {
+                    long time = System.currentTimeMillis();
+
+                    System.out.println("Creating MRF...");
+                    GroundMLN groundMlnEStep = fgmEStep.groundWithHyperCubes(hyperCubeMLNEStep, groundPredicatesEStep, groundPredicateIntegerMapEStep);
+                    if(lArgs.agg)
+                    {
+                        groundMlnEStep.setNumConnections();
+                        int count = 0;
+                        for(GroundFormula gf : groundMlnEStep.groundFormulas)
+                        {
+                            for(int pfId : gf.parentFormulaId)
+                            {
+                                if(firstOrderNumConnections.get(pfId) == 0.0)
+                                {
+                                    firstOrderNumConnections.set(pfId, Collections.max(gf.numConnections.get(pfId)));
+                                    count++;
+                                }
+                            }
+                            if(count >= mln.formulas.size())
+                                break;
+                        }
+                        groundMlnEStep.setEffWts(mln);
+                    }
+                    else
+                    {
+                        groundMlnEStep.setGroundFormulaWtsToSumOfParentWts(mln);
+                    }
+//
+                    Evidence truthEStep = new Evidence();
+                    truthsEStep.add(truthEStep);
+                    if(lArgs.priorSoftEvidence) {
+                        groundMlnEStep = fgmEStep.addSoftEvidence(groundMlnEStep, lArgs.softEvidenceFiles.get(i), lArgs.seLambda, lArgs.sePred);
+                    }
+                    groundMlnsEStep.add(groundMlnEStep);
+
+                    GroundMLN groundMlnMStep = fgmMStep.groundWithHyperCubes(hyperCubeMLNMStep, groundPredicatesMStep, groundPredicateIntegerMapMStep);
+                    if(lArgs.agg)
+                    {
+                        groundMlnMStep.setNumConnections();
+                        for(Formula formula : mln.formulas)
+                            firstOrderNumConnections.add(0.0);
+                        int count = 0;
+                        for(GroundFormula gf : groundMlnMStep.groundFormulas)
+                        {
+                            for(int pfId : gf.parentFormulaId)
+                            {
+                                if(firstOrderNumConnections.get(pfId) == 0.0)
+                                {
+                                    firstOrderNumConnections.set(pfId, Collections.max(gf.numConnections.get(pfId)));
+                                    count++;
+                                }
+                            }
+                            if(count >= mln.formulas.size())
+                                break;
+                        }
+                        groundMlnMStep.setEffWts(mln);
+                    }
+                    else
+                    {
+                        groundMlnMStep.setGroundFormulaWtsToSumOfParentWts(mln);
+                    }
+//
+                    Evidence truthMStep = parser.parseEvidence(groundMlnMStep,lArgs.truthFiles.get(i), queryPredsMStep);
+                    truthsMStep.add(truthMStep);
+                    if(lArgs.priorSoftEvidence) {
+                        groundMlnMStep = fgmMStep.addSoftEvidence(groundMlnMStep, lArgs.softEvidenceFiles.get(i), lArgs.seLambda, lArgs.sePred);
+                    }
+                    groundMlnsMStep.add(groundMlnMStep);
+                    System.out.println("Time taken to create MRF : " + Timer.time((System.currentTimeMillis() - time)/1000.0));
+                    System.out.println("Total number of ground formulas in E step : " + groundMlnEStep.groundFormulas.size());
+                    System.out.println("Total number of ground formulas in M step : " + groundMlnMStep.groundFormulas.size());
+                    System.out.println("Total number of ground preds in E Step : " + groundMlnEStep.indexToGroundPredMap.size());
+                    System.out.println("Total number of ground preds in M Step : " + groundMlnMStep.indexToGroundPredMap.size());
+
+                }
+                System.out.println("ssffdf");
             }
             else
             {
-                long time = System.currentTimeMillis();
-                List<FirstEvidence> evidList = parser.parseInputEvidenceFile(lArgs.evidenceFiles.get(i));
-                MlnToHyperCube mlnToHyperCube = new MlnToHyperCube();
-                HashMap<PredicateSymbol,ArrayList<ArrayList<HyperCube>>> predsHyperCubeHashMap = mlnToHyperCube.createPredsHyperCube(evidList,mln,closedWorldPreds);
-                System.out.println("Creating Hypercubes...");
-                int origNumFormulas = mln.formulas.size();
+                HashMap<PredicateSymbol,ArrayList<ArrayList<HyperCube>>> predsHyperCubeHashMap = mlnToHyperCube.createPredsHyperCube(evidList, evidPreds, truthList, queryPreds, mln, lArgs.queryEvidence);
+
+                System.out.println("Creating Hypercubes for " + origNumFormulas + " formulas...");
                 boolean isNormal = false;
 
                 // Create a copy of this mln without formulas. In that copy, we will add hypercube formulas.
                 MLN hyperCubeMLN = mln.copyMLNWithoutformulas();
                 for(int formulaId = 0 ; formulaId < origNumFormulas ; formulaId++){
                     hyperCubeMLN.formulas.addAll(mlnToHyperCube.createFormulaHyperCube(mln.formulas.get(formulaId), predsHyperCubeHashMap, isNormal));
+                    if((formulaId+1)%10 == 0)
+                        System.out.println(formulaId+1 + " formulas done...");
                 }
-                System.out.println("Creating MRF...");
-                GroundMLN groundMln = fgm.groundWithHyperCubes(hyperCubeMLN, groundPredicates, groundPredicateIntegerMap);
-                if(lArgs.agg)
+
+                // This is a reverse mapping from groundPredicates to their indices in global groundPredicates list. This
+                // mapping will be filled by following function call : fgm.createGroundPredicatesFromPredsHashMap
+                Map<GroundPredicate, Integer> groundPredicateIntegerMap = new HashMap<>();
+                List<GroundPredicate> groundPredicates = fgm.createGroundPredicatesFromPredsHashMap(predsHyperCubeHashMap, groundPredicateIntegerMap);
+
+                if(lArgs.pll)
                 {
-                    groundMln.setNumConnections();
-                    for(Formula formula : mln.formulas)
-                        firstOrderNumConnections.add(0.0);
-                    int count = 0;
-                    for(GroundFormula gf : groundMln.groundFormulas)
-                    {
-                        for(int pfId : gf.parentFormulaId)
-                        {
-                            if(firstOrderNumConnections.get(pfId) == 0.0)
-                            {
-                                firstOrderNumConnections.set(pfId, Collections.max(gf.numConnections.get(pfId)));
-                                count++;
-                            }
-                        }
-                        if(count >= mln.formulas.size())
-                            break;
+                    // This groundMLN will contain only list of groundPredicates, not groundformulas since we are not grounding MLN.
+                    GroundMLN groundMLN = new GroundMLN();
+
+                    for (int gpId = 0; gpId< groundPredicates.size(); gpId++) {
+                        groundMLN.indexToGroundPredMap.put(gpId, groundPredicates.get(gpId));
                     }
-                    groundMln.setEffWts(mln);
+                    groundMLN.groundPredToIntegerMap = groundPredicateIntegerMap;
+                    groundMlns.add(groundMLN);
+                    Evidence truth = parser.parseEvidence(groundMLN,lArgs.truthFiles.get(i), queryPreds);
+                    truths.add(truth);
+                    if(lArgs.agg)
+                    {
+                        for (int j = 0; j < mln.formulas.size(); j++) {
+                            Formula f = mln.formulas.get(j);
+                            Set<Term> fTerms = new HashSet<Term>(f.terms);
+                            double maxConnections = 0.0;
+                            for(WClause clause : f.clauses)
+                            {
+                                for(Atom atom : clause.atoms)
+                                {
+                                    Set<Term> atomTerms = new HashSet<Term>(atom.terms);
+                                    Set<Term> tempFTerms = new HashSet<Term>(fTerms);
+                                    tempFTerms.removeAll(atomTerms);
+                                    int num = 1;
+                                    for(Term t : tempFTerms)
+                                    {
+                                        num *= t.domain.size();
+                                    }
+                                    if(num > maxConnections)
+                                    {
+                                        maxConnections = num;
+                                    }
+                                }
+                            }
+                            firstOrderNumConnections.set(j, firstOrderNumConnections.get(j)+maxConnections);
+                        }
+                    }
+
+//                if(evidPreds.size()!=0)
+//                {
+//                    Evidence evidence = parser.parseEvidence(groundMLN, lArgs.evidenceFiles.get(i), queryClusterPreds);
+//                    reduceDomainByEvidence(mln, groundMLN, evidence);
+//                    fgm.removeEvidenceGroundPreds(groundMLN, evidence);
+//                }
                 }
                 else
                 {
-                    groundMln.setGroundFormulaWtsToSumOfParentWts(mln);
+                    long time = System.currentTimeMillis();
+
+                    System.out.println("Creating MRF...");
+                    GroundMLN groundMln = fgm.groundWithHyperCubes(hyperCubeMLN, groundPredicates, groundPredicateIntegerMap);
+                    if(lArgs.agg)
+                    {
+//                        groundMln.setNumConnections();
+//                        int count = 0;
+//                        for(GroundFormula gf : groundMln.groundFormulas)
+//                        {
+//                            for(int pfId : gf.parentFormulaId)
+//                            {
+//                                if(firstOrderNumConnections.get(pfId) == 0.0)
+//                                {
+//                                    firstOrderNumConnections.set(pfId, Collections.max(gf.numConnections.get(pfId)));
+//                                    count++;
+//                                }
+//                            }
+//                            if(count >= mln.formulas.size())
+//                                break;
+//                        }
+                        if(lArgs.agg)
+                        {
+                            for (int j = 0; j < mln.formulas.size(); j++) {
+                                Formula f = mln.formulas.get(j);
+                                Set<Term> fTerms = new HashSet<Term>(f.terms);
+                                double maxConnections = 0.0;
+                                for(WClause clause : f.clauses)
+                                {
+                                    for(Atom atom : clause.atoms)
+                                    {
+                                        Set<Term> atomTerms = new HashSet<Term>(atom.terms);
+                                        Set<Term> tempFTerms = new HashSet<Term>(fTerms);
+                                        tempFTerms.removeAll(atomTerms);
+                                        int num = 1;
+                                        for(Term t : tempFTerms)
+                                        {
+                                            num *= t.domain.size();
+                                        }
+                                        if(num > maxConnections)
+                                        {
+                                            maxConnections = num;
+                                        }
+                                    }
+                                }
+                                firstOrderNumConnections.set(j, firstOrderNumConnections.get(j)+maxConnections);
+                            }
+                        }
+
+                        groundMln.setEffWts(mln);
+                    }
+                    else
+                    {
+                        groundMln.setGroundFormulaWtsToSumOfParentWts(mln);
+                    }
+
+                    groundMlns.add(groundMln);
+                    Evidence truth = parser.parseEvidence(groundMln,lArgs.truthFiles.get(i), queryPreds);
+                    truths.add(truth);
+                    if(lArgs.priorSoftEvidence) {
+                        groundMln = fgm.addSoftEvidence(groundMln, lArgs.softEvidenceFiles.get(i), lArgs.seLambda, lArgs.sePred);
+                    }
+                    System.out.println("Time taken to create MRF : " + Timer.time((System.currentTimeMillis() - time)/1000.0));
+                    System.out.println("Total number of ground formulas : " + groundMln.groundFormulas.size());
+                    System.out.println("Total number of ground preds : " + groundMln.indexToGroundPredMap.size());
+
                 }
-
-                groundMlns.add(groundMln);
-                if(evidPreds.size()!=0)
-                {
-                    Evidence evidence = parser.parseEvidence(groundMln, lArgs.evidenceFiles.get(i), queryClusterPreds);
-                    reduceDomainByEvidence(mln, groundMln, evidence);
-                    fgm.removeEvidenceGroundPreds(groundMln, evidence);
-                }
-                Evidence truth = parser.parseEvidence(groundMln,lArgs.truthFiles.get(i), queryPreds);
-                truths.add(truth);
-                if(lArgs.priorSoftEvidence) {
-                    groundMln = fgm.addSoftEvidence(groundMln, lArgs.softEvidenceFiles.get(i), lArgs.seLambda, lArgs.sePred);
-                }
-                boolean withEM = false;
-//                if(lArgs.withEM){
-//                    withEM = true;
-//                    Set<String> evidEmPreds = new HashSet<String>();
-//                    evidEmPreds.addAll(evidPreds);
-//                    evidEmPreds.addAll(queryPreds);
-////                Map<GroundPredicate,Integer> gpToIntegerMap = new HashMap<>();
-//                    GroundMLN EMNewGroundMln = fgm.handleEvidence(groundMln, Evidence.mergeEvidence(evidence,truth), null, evidEmPreds, null, hiddenPreds, withEM, lArgs.queryEvidence);
-////                newGroundMln = fgm.handleEvidence(groundMln, evidence, truth, evidPreds, queryPreds, hiddenPreds, false, gpToIntegerMap);
-//                    subtypeMaps[i] = mapPredIdEmToNormal(newGroundMln.groundPredToIntegerMap, EMNewGroundMln.groundPredToIntegerMap, hiddenPreds);
-//
-//                    //GibbsSampler_v2 gsEM = new GibbsSampler_v2(mln, EMNewGroundMln, truth, 20, lArgs.numEMSamples, false, false, lArgs.priorSoftEvidence, true);
-//                    //inferencesEM.add(gsEM);
-//                }
-
-                //GibbsSampler_v2 gs = new GibbsSampler_v2(mln, newGroundMln, truth, 100, lArgs.gibbsParam.samplesPerTest, true, false, lArgs.priorSoftEvidence, false);
-                //inferences.add(gs);
-
-                System.out.println("Time taken to create MRF : " + Timer.time((System.currentTimeMillis() - time)/1000.0));
-                System.out.println("Total number of ground formulas : " + groundMln.groundFormulas.size());
-                System.out.println("Total number of ground preds : " + groundMln.indexToGroundPredMap.size());
-
             }
+
         }
 
-        WeightLearner wl;
-        if(lArgs.pll)
-            wl = new GenLearner(mlns, groundMlns, null, truths, null, lArgs);
+        if(lArgs.withEM)
+        {
+            if(lArgs.pll)
+                wl = new GenLearner(mlns, groundMlnsMStep, groundMlnsEStep, truthsMStep, truthsEStep, lArgs, groundHiddenPredMapMToEStep);
+            else
+                wl = new DiscLearn(mlns, groundMlnsMStep, groundMlnsEStep, truthsMStep, truthsEStep, lArgs, groundHiddenPredMapMToEStep);
+        }
         else
-            wl = new DiscLearn(mlns, groundMlns, null, truths, null, lArgs);
+        {
+            if(lArgs.pll)
+                wl = new GenLearner(mlns, groundMlns, null, truths, null, lArgs, null);
+            else
+                wl = new DiscLearn(mlns, groundMlns, null, truths, null, lArgs, null);
+        }
+
 
         wl.learnWeights();
         wl.writeWeights(lArgs.mlnFile, lArgs.outFile);
@@ -264,14 +474,14 @@ public class LearnTest {
         return allPreds;
     }
 
-    private static Map<Integer,Integer> mapPredIdEmToNormal(Map<GroundPredicate, Integer> gpToIntegerMap, Map<GroundPredicate, Integer> gpToIntegerMapEM, Set<String> hiddenPreds) {
+    private static Map<Integer,Integer> mapPredIdMStepToEStep(Map<GroundPredicate, Integer> gpToIntegerMapMStep, Map<GroundPredicate, Integer> gpToIntegerMapEStep, Set<String> hiddenPreds) {
         Map<Integer, Integer> subtypeMap = new HashMap<>();
-        for(GroundPredicate gp : gpToIntegerMap.keySet()){
+        for(GroundPredicate gp : gpToIntegerMapMStep.keySet()){
             if(hiddenPreds.contains(gp.symbol.symbol)){
-                if(gpToIntegerMapEM.containsKey(gp))
-                    subtypeMap.put(gpToIntegerMap.get(gp), gpToIntegerMapEM.get(gp));
+                if(gpToIntegerMapEStep.containsKey(gp))
+                    subtypeMap.put(gpToIntegerMapMStep.get(gp), gpToIntegerMapEStep.get(gp));
                 else
-                    subtypeMap.put(gpToIntegerMap.get(gp), -1);
+                    subtypeMap.put(gpToIntegerMapMStep.get(gp), -1);
             }
         }
         return subtypeMap;

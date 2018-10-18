@@ -38,8 +38,8 @@ public class GenLearner extends WeightLearner{
      * @throws FileNotFoundException
      */
     public GenLearner(List<MLN> mlnsParam, List<GroundMLN> groundMlnsParam, List<GroundMLN> groundMlnsEMParam,
-                      List<Evidence> truthsParam, List<Evidence> truthsEMParam, LearnArgs lArgs) throws FileNotFoundException {
-        super(mlnsParam, groundMlnsParam, groundMlnsEMParam, truthsParam, truthsEMParam, lArgs);
+                      List<Evidence> truthsParam, List<Evidence> truthsEMParam, LearnArgs lArgs, List<Map<Integer,Integer>> groundHiddenPredMapMToEStep) throws FileNotFoundException {
+        super(mlnsParam, groundMlnsParam, groundMlnsEMParam, truthsParam, truthsEMParam, lArgs, groundHiddenPredMapMToEStep);
         if(lArgs.debug)
             genLearnDebug = true;
         isPll = lArgs.pll;
@@ -82,6 +82,12 @@ public class GenLearner extends WeightLearner{
             public double evaluate(double[] beta, double[] g, int n, double step) {
                 double logLoss = 0;
                 Arrays.fill(g, 0);
+                if(learnArgs.agg)
+                {
+                    for (int i = 0; i < states.get(0).mln.formulas.size(); i++) {
+                        weights[i] /= LearnTest.firstOrderNumConnections.get(i);
+                    }
+                }
                 setMLNWeights();
 
 //                if(withEM){
@@ -105,10 +111,17 @@ public class GenLearner extends WeightLearner{
 //                else
                 {
                     //updateMLN(false);
+
                     logLoss += loss.getLossValue();
                     double []tempGrad = loss.getGradient();
                     for (int i = 0; i < g.length; i++) {
                         g[i] += tempGrad[i];
+                    }
+                }
+                if(learnArgs.agg)
+                {
+                    for (int i = 0; i < states.get(0).mln.formulas.size(); i++) {
+                        weights[i] *= LearnTest.firstOrderNumConnections.get(i);
                     }
                 }
 

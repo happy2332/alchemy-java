@@ -6,6 +6,8 @@ import org.utd.cs.mln.alchemy.util.OtherUtils;
 import java.io.PrintWriter;
 import java.util.*;
 
+import static org.utd.cs.mln.alchemy.util.OtherUtils.getUniformAssignment;
+
 /**
  * Abstract class from which all MCMC algorithms are sub classed.
  * @author Happy
@@ -27,9 +29,10 @@ public abstract class MCMC extends Inference {
     public int maxSeconds;
 
     boolean mcmcdebug = true;
+    boolean trackState = false;
 
     // Truth values in each chain for each ground predicate (truthValues[c][p])
-    Map<Integer, Integer> truthValues [];
+    public Map<Integer, Integer> truthValues [];
 
     // Num. of satisfying literals in each chain for each ground formula for each ground clause
     // numSatLiterals[chain][formula][clause]
@@ -106,6 +109,11 @@ public abstract class MCMC extends Inference {
                 numValPerChainPerPred_.get(c).put(gpId, new ArrayList<>(Collections.nCopies(numPossibleVals,0.0)));
                 wtsPerPredPerVal.get(c).put(gpId, new ArrayList<Double>(Collections.nCopies(numPossibleVals,0.0)));
             }
+        }
+
+        if(trackState)
+        {
+
         }
 
     }
@@ -213,14 +221,6 @@ public abstract class MCMC extends Inference {
                 truthValues[c].put(gpId,assignment);
             }
         }
-    }
-
-    /**
-     * Generates a random integer from 0 to n-1
-     */
-    int getUniformAssignment(int n) {
-        int r = rand.nextInt(n);
-        return r;
     }
 
     // According to present truthVals, set falseClausesSet and numSatLiterals
@@ -552,7 +552,10 @@ public abstract class MCMC extends Inference {
             return;
 
         //resetCnts();
-        allFormulaTrueCnts.clear();;
+        for (int i = 0; i < allFormulaTrueCnts.size(); i++) {
+            allFormulaTrueCnts.get(i).clear();
+        }
+        allFormulaTrueCnts.clear();
         System.out.println("Restoring counts...");
         if(trackFormulaTrueCnts){
             for (int i = 0; i < oldAllFormulaTrueCnts.size(); i++)
@@ -575,6 +578,9 @@ public abstract class MCMC extends Inference {
     public void saveToOldCnts() {
         if (!saveAllCounts)
             return;
+        for (int i = 0; i < oldAllFormulaTrueCnts.size(); i++) {
+            oldAllFormulaTrueCnts.get(i).clear();
+        }
         oldAllFormulaTrueCnts.clear();
         if(trackFormulaTrueCnts){
             for (int i = 0; i < allFormulaTrueCnts.size(); i++)

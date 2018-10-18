@@ -50,94 +50,141 @@ public class MlnToHyperCube {
         }
     }
 
+    /**
+     * Similar to createPredsTupleHashMap, except that all entries are filled into unknown state
+     * @param evidList List of evidence
+     * @param predTuplesHashMap HashMap in which we want to put entries
+     */
+    public void createPredsTupleHashMapForQuery(List<FirstEvidence> evidList, HashMap<PredicateSymbol,
+            ArrayList<ArrayList<TupleConstants>>> predTuplesHashMap){
+        for(FirstEvidence evid : evidList){
+            PredicateSymbol predSymbol = evid.symbol;
+            ArrayList<Integer> constants = evid.terms;
+            if(!predTuplesHashMap.containsKey(predSymbol)){
+                ArrayList<ArrayList<TupleConstants>> tuples = new ArrayList<ArrayList<TupleConstants>>();
+                // Create numPossibleVals+1 tuples, +1 for unknown state
+                for(int i = 0 ; i < predSymbol.values.values.size()+1 ; i++){
+                    tuples.add(new ArrayList<TupleConstants>());
+                }
+                predTuplesHashMap.put(predSymbol, tuples);
+            }
+            predTuplesHashMap.get(predSymbol).get(predSymbol.values.values.size()).add(new TupleConstants(constants));
+        }
+    }
+
     // It creates this list of hyperCubes for each possible value of predicate + unknown state, for each predicate, using evidence and MLN
     // To store these lists, we create a hashMap with key : predicateSymbol, value : List of size (numPossibleVals)+1. This list
     // stores list of hypercubes for each of the state of predicate.
 
-    public HashMap<PredicateSymbol,ArrayList<ArrayList<HyperCube>>> createPredsHyperCube(List<FirstEvidence> evidList, MLN mln, Set<String> closedworldpreds){
+    public HashMap<PredicateSymbol,ArrayList<ArrayList<HyperCube>>> createPredsHyperCube(List<FirstEvidence> evidList, Set<String> evidPreds, List<FirstEvidence> truthList, Set<String> queryPreds, MLN mln, boolean queryEvidence){
+        // First create a similar hashMap for both evidList and truthList, but instead of hyperCube it stores each tuple
+        HashMap<PredicateSymbol,ArrayList<ArrayList<TupleConstants>>> evidPredsTuplesHashMap = new HashMap<PredicateSymbol,ArrayList<ArrayList<TupleConstants>>>();
+        createPredsTupleHashMap(evidList, evidPredsTuplesHashMap);
+        HashMap<PredicateSymbol,ArrayList<ArrayList<TupleConstants>>> truthPredsTuplesHashMap = new HashMap<PredicateSymbol,ArrayList<ArrayList<TupleConstants>>>();
+        createPredsTupleHashMapForQuery(truthList, truthPredsTuplesHashMap);
 
-        // First create a similar hashMap, but instead of hyperCube it stores each tuple
-        HashMap<PredicateSymbol,ArrayList<ArrayList<TupleConstants>>> predsTuplesHashMap = new HashMap<PredicateSymbol,ArrayList<ArrayList<TupleConstants>>>();
-        createPredsTupleHashMap(evidList, predsTuplesHashMap);
-		/*//
-		for(PredicateSymbol predSymbol : predsTuplesHashMap.keySet()){
-			System.out.println(predsTuplesHashMap.get(predSymbol).get(0));
-		}*///
-
+        // Resultant hyperCibeHashMap in which we will store hypercubes.
         HashMap<PredicateSymbol,ArrayList<ArrayList<HyperCube>>> predsHyperCubesHashMap = new HashMap<PredicateSymbol,ArrayList<ArrayList<HyperCube>>>();
         CreateHyperCubeBasic chcb = new CreateHyperCubeBasic();
-        // Now for each predicate, create its all but unknown hypercubes
-        for(PredicateSymbol predSymbol : predsTuplesHashMap.keySet()){
+        // Now for each predicate symbol in MLN, create its hypercubes
+        for(PredicateSymbol predSymbol : mln.symbols)
+        {
             int numPossibleVals = predSymbol.values.values.size();
             predsHyperCubesHashMap.put(predSymbol, new ArrayList<ArrayList<HyperCube>>());
-            for(int i = 0 ; i < numPossibleVals ; i++){
-                // Create hyperCubes
-                ArrayList<HyperCube>hyperCubes = chcb.createHyperCubesBasic(predsTuplesHashMap.get(predSymbol).get(i));
-                ArrayList<HyperCube> mergedHyperCubes = chcb.mergeHyperCubes(hyperCubes);
-                ///System.out.println(hyperCubes);
-                predsHyperCubesHashMap.get(predSymbol).add(mergedHyperCubes);
-            }
-            ///System.out.println("pred : "+predSymbol.toString());
-            ///System.out.println("True False hypercubes done");
-            ///System.out.println("creating unknowns");
-            //System.out.println(predSymbol);
-            //System.out.println(predsHyperCubesHashMap.get(predSymbol).get(0));
-            // Now we have to create hypercubes for unknown. We don't need to calculate all tuples of unknown state
-            // we can simply subtract true and false hypercubes from domain hyperCube <0,1,...n>
-
-            // Create this predicate's domain hyperCube
-            HyperCube predDomainHyperCube = createPredDomainHyperCube(mln, predSymbol);
-            ArrayList<HyperCube>unknownHyperCubes = new ArrayList<HyperCube>();
-            ArrayList<HyperCube>allButUnknownHyperCubes = new ArrayList<HyperCube>();
-            // Union all but unknown hypercubes
-            for (int i = 0; i < numPossibleVals; i++) {
-                allButUnknownHyperCubes.addAll(predsHyperCubesHashMap.get(predSymbol).get(i));
-            }
-
-            // Merge all but unknown hypercubes so that we get efficient unknown hypercube
-            allButUnknownHyperCubes = chcb.mergeHyperCubes(allButUnknownHyperCubes);
-            ///System.out.println("both true and false merged and number of hypercubes in them is : "+bothTrueFalseHyperCubes.size());
-            //System.out.println(bothTrueFalseHyperCubes);
-            //System.out.println(predSymbol);
-            // Finally subtract allbutunknown hypercubes from domainHyperCube
-            unknownHyperCubes = chcb.createComplementaryHyperCubes(allButUnknownHyperCubes, predDomainHyperCube);
-            ///System.out.println("Initial unmerged unknown hypercubes done");
-            //System.out.println(unknownHyperCubes);
-            // Merge again unknown hyperCubes to get minimal number of hypercubes
-            unknownHyperCubes = chcb.mergeHyperCubes(unknownHyperCubes);
-            ///System.out.println("merging of unknown hypercubes done, now size of unknown hypercubes is "+ unknownHyperCubes.size());
-            //System.out.println(unknownHyperCubes);
-            ///System.out.println("creating disjoint hypercubes");
-            //chcb.createDisjointHyperCubes(unknownHyperCubes);
-            ///System.out.println("created disjoint of unknown hypercubes and now size of unknown hypercubes is "+ unknownHyperCubes.size());
-            //System.out.println(bothTrueFalseHyperCubes);
-            //System.out.println(unknownHyperCubes);
-            if(closedworldpreds.contains(predSymbol.symbol)){
-                predsHyperCubesHashMap.get(predSymbol).get(0).addAll(unknownHyperCubes);
+            for(int i = 0 ; i <= numPossibleVals ; i++){
                 predsHyperCubesHashMap.get(predSymbol).add(new ArrayList<HyperCube>());
             }
-            else {
-                predsHyperCubesHashMap.get(predSymbol).add(unknownHyperCubes);
-            }
-        }
-        // If there is a predicate which didn't appear in evidence file, its unknown hypercube is only its domain
-        // hypercube. Its true and false hypercubes list is empty
-        for(PredicateSymbol predSymbol : mln.symbols){
-            int numPossibleVals = predSymbol.values.values.size();
-            if(!predsHyperCubesHashMap.containsKey(predSymbol)){
-                predsHyperCubesHashMap.put(predSymbol, new ArrayList<ArrayList<HyperCube>>());
+            // 3 cases :
+            // case1 : This predicate is only evidence predicate, and not query predicate. In this case, all unknowns would be false.
+            // case2 : This predicate is only query predicate, and not evidence predicate. In this case, everything will be unknown, unless there is queryEvidence. In that case, all unknowns will be false.
+            // case3 : This predicate is both evidence and query predicate. In this case, unknowns will be unknowns.
+
+            // case1
+            if(evidPreds.contains(predSymbol.symbol) && !queryPreds.contains(predSymbol.symbol))
+            {
+                for(int i = 0 ; i < numPossibleVals ; i++){
+                    // Create hyperCubes
+                    ArrayList<HyperCube>hyperCubes = chcb.createHyperCubesBasic(evidPredsTuplesHashMap.get(predSymbol).get(i));
+                    ArrayList<HyperCube> mergedHyperCubes = chcb.mergeHyperCubes(hyperCubes);
+                    predsHyperCubesHashMap.get(predSymbol).set(i, mergedHyperCubes);
+                }
+                // Now we have to create hypercubes for unknown. We don't need to calculate all tuples of unknown state
+                // we can simply subtract true and false hypercubes from domain hyperCube <0,1,...n>
+
+                // Create this predicate's domain hyperCube
+                HyperCube predDomainHyperCube = createPredDomainHyperCube(mln, predSymbol);
+                ArrayList<HyperCube>unknownHyperCubes;
+                ArrayList<HyperCube>allButUnknownHyperCubes = new ArrayList<HyperCube>();
+                // Union all but unknown hypercubes
                 for (int i = 0; i < numPossibleVals; i++) {
-                    predsHyperCubesHashMap.get(predSymbol).add(new ArrayList<HyperCube>());
+                    allButUnknownHyperCubes.addAll(predsHyperCubesHashMap.get(predSymbol).get(i));
                 }
-                ArrayList<HyperCube> unknownHyperCubes = new ArrayList<HyperCube>();
-                unknownHyperCubes.add(createPredDomainHyperCube(mln, predSymbol));
-                if(closedworldpreds.contains(predSymbol.symbol)){
-                    predsHyperCubesHashMap.get(predSymbol).get(0).addAll(unknownHyperCubes);
-                    predsHyperCubesHashMap.get(predSymbol).add(new ArrayList<HyperCube>());
+
+                // Merge all but unknown hypercubes so that we get efficient unknown hypercube
+                allButUnknownHyperCubes = chcb.mergeHyperCubes(allButUnknownHyperCubes);
+
+                // Finally subtract allbutunknown hypercubes from domainHyperCube
+                unknownHyperCubes = chcb.createComplementaryHyperCubes(allButUnknownHyperCubes, predDomainHyperCube);
+
+                // Merge again unknown hyperCubes to get minimal number of hypercubes
+                unknownHyperCubes = chcb.mergeHyperCubes(unknownHyperCubes);
+                predsHyperCubesHashMap.get(predSymbol).get(0).addAll(unknownHyperCubes);
+            }
+
+            //case 2
+            if(!evidPreds.contains(predSymbol.symbol) && queryPreds.contains(predSymbol.symbol))
+            {
+                if(!queryEvidence)
+                {
+                    ArrayList<HyperCube> unknownHyperCubes = new ArrayList<HyperCube>();
+                    unknownHyperCubes.add(createPredDomainHyperCube(mln, predSymbol));
+                    predsHyperCubesHashMap.get(predSymbol).set(numPossibleVals, unknownHyperCubes);
                 }
-                else {
-                    predsHyperCubesHashMap.get(predSymbol).add(unknownHyperCubes);
+                else
+                {
+                    ArrayList<HyperCube>hyperCubes = chcb.createHyperCubesBasic(truthPredsTuplesHashMap.get(predSymbol).get(numPossibleVals));
+                    ArrayList<HyperCube> mergedHyperCubes = chcb.mergeHyperCubes(hyperCubes);
+                    predsHyperCubesHashMap.get(predSymbol).set(numPossibleVals, mergedHyperCubes);
+
+                    // Create this predicate's domain hyperCube
+                    HyperCube predDomainHyperCube = createPredDomainHyperCube(mln, predSymbol);
+                    ArrayList<HyperCube>falseHyperCubes = chcb.createComplementaryHyperCubes(mergedHyperCubes, predDomainHyperCube);
+
+                    // Merge again unknown hyperCubes to get minimal number of hypercubes
+                    falseHyperCubes = chcb.mergeHyperCubes(falseHyperCubes);
+                    predsHyperCubesHashMap.get(predSymbol).set(0,falseHyperCubes);
                 }
+            }
+            // case 3 :
+            if(evidPreds.contains(predSymbol.symbol) && queryPreds.contains(predSymbol.symbol))
+            {
+                for(int i = 0 ; i < numPossibleVals ; i++){
+                    // Create hyperCubes
+                    ArrayList<HyperCube>hyperCubes = chcb.createHyperCubesBasic(evidPredsTuplesHashMap.get(predSymbol).get(i));
+                    ArrayList<HyperCube> mergedHyperCubes = chcb.mergeHyperCubes(hyperCubes);
+                    predsHyperCubesHashMap.get(predSymbol).set(i, mergedHyperCubes);
+                }
+                // Now we have to create hypercubes for unknown. We don't need to calculate all tuples of unknown state
+                // we can simply subtract true and false hypercubes from domain hyperCube <0,1,...n>
+
+                // Create this predicate's domain hyperCube
+                HyperCube predDomainHyperCube = createPredDomainHyperCube(mln, predSymbol);
+                ArrayList<HyperCube>unknownHyperCubes;
+                ArrayList<HyperCube>allButUnknownHyperCubes = new ArrayList<HyperCube>();
+                // Union all but unknown hypercubes
+                for (int i = 0; i < numPossibleVals; i++) {
+                    allButUnknownHyperCubes.addAll(predsHyperCubesHashMap.get(predSymbol).get(i));
+                }
+
+                // Merge all but unknown hypercubes so that we get efficient unknown hypercube
+                allButUnknownHyperCubes = chcb.mergeHyperCubes(allButUnknownHyperCubes);
+
+                // Finally subtract allbutunknown hypercubes from domainHyperCube
+                unknownHyperCubes = chcb.createComplementaryHyperCubes(allButUnknownHyperCubes, predDomainHyperCube);
+
+                // Merge again unknown hyperCubes to get minimal number of hypercubes
+                unknownHyperCubes = chcb.mergeHyperCubes(unknownHyperCubes);
+                predsHyperCubesHashMap.get(predSymbol).set(numPossibleVals,unknownHyperCubes);
             }
         }
         return predsHyperCubesHashMap;
@@ -446,7 +493,7 @@ public class MlnToHyperCube {
                         }
 
                         // Finally join two atoms and get result in finalAtom
-                        System.out.println("formula = " + formula);
+                        //System.out.println("formula = " + formula);
                         joinAtomsCommonVars(atom1, atom, atom1CommonTermIndices, atomCommonTermIndices, finalAtom);
                         // check if finalatom's hypercube is not empty
                         if(finalAtom.hyperCubes.isEmpty())
@@ -1079,7 +1126,7 @@ public class MlnToHyperCube {
         ArrayList<FirstEvidence> evidList = parser.parseInputEvidenceFile("smoke/smoke_evidence.txt");
         //ArrayList<Evidence> evidList = parser.parseInputEvidenceFile("entity_resolution/er-test-eclipse.db");
         MlnToHyperCube mlnToHyperCube = new MlnToHyperCube();
-        HashMap<PredicateSymbol,ArrayList<ArrayList<HyperCube>>> predsHyperCubeHashMap = mlnToHyperCube.createPredsHyperCube(evidList,mln,new HashSet<String>());
+        HashMap<PredicateSymbol,ArrayList<ArrayList<HyperCube>>> predsHyperCubeHashMap = mlnToHyperCube.createPredsHyperCube(evidList,new HashSet<String>(),new ArrayList<FirstEvidence>(),new HashSet<String>(),mln, false);
 
 
         for(PredicateSymbol predSymbol : predsHyperCubeHashMap.keySet()){

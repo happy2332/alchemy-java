@@ -32,20 +32,22 @@ public abstract class WeightLearner {
     public int numFormulas;
     public boolean withEM;
     public LearnArgs learnArgs;
+    List<Map<Integer,Integer>> groundHiddenPredMapMToEStep;
 
     /**
      * Constructor : Initializes the fields
      * @param mlnsParam List of MLNs of size number of databases. All MLNs are same except for domains for predicates.
      */
     public WeightLearner(List<MLN> mlnsParam, List<GroundMLN> groundMlnsParam, List<GroundMLN> groundMlnsEMParam,
-                         List<Evidence> truthsParam, List<Evidence> truthsEMParam, LearnArgs lArgs) throws FileNotFoundException {
+                         List<Evidence> truthsParam, List<Evidence> truthsEMParam, LearnArgs lArgs, List<Map<Integer,Integer>> groundHiddenPredMapMToEStep) throws FileNotFoundException {
 
         learnArgs = lArgs;
         withEM = lArgs.withEM;
         //create states
         states = new ArrayList<>();
-        if(withEM)
+        if(withEM) {
             statesEM = new ArrayList<>();
+        }
         domain_cnt = mlnsParam.size();
         for (int i = 0; i < domain_cnt; i++) {
             states.add(new State(mlnsParam.get(i), groundMlnsParam.get(i), truthsParam.get(i)));
@@ -75,6 +77,7 @@ public abstract class WeightLearner {
                 weights[i] = states.get(0).mln.formulas.get(i).weight.getValue();
             }
         }
+        this.groundHiddenPredMapMToEStep = groundHiddenPredMapMToEStep;
     }
 
     /**
@@ -147,7 +150,7 @@ public abstract class WeightLearner {
                 continue;
             } else {
                 String[] formulaArr = line.split(Parser.WEIGHTSEPARATOR);
-                pw.printf(formulaArr[0] + Parser.WEIGHTSEPARATOR + "%.3f\n",weights[formulaNum]);
+                pw.printf(formulaArr[0] + Parser.WEIGHTSEPARATOR + "%.6f\n",weights[formulaNum]);
                 formulaNum++;
             }
         }

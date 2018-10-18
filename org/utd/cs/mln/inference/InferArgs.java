@@ -43,7 +43,7 @@ public class InferArgs {
     public boolean agg;
 
     /**
-     * @see LearnArgs.GibbsParamConverter
+     * @see InferArgs.GibbsParamConverter
      */
     @Parameter(names="-gibbs", description = "Inference arguments provided between double quotes", converter = InferArgs.GibbsParamConverter.class)
     public GibbsParams gibbsParam = new GibbsParams();
@@ -130,7 +130,7 @@ public class InferArgs {
         public int samplesPerTest = 100;
         @Parameter(names="-burnMaxSteps", description = "Max Number of samples per pred per chain for burning")
         public int burnMaxSteps = 10;
-        @Parameter(names="-testConvergence", description = "If specified, test for convergence")
+        @Parameter(names="-testConvergence", description = "If specified, test for convergence", arity=1)
         public boolean testConvergence = true;
 
 

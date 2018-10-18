@@ -949,6 +949,32 @@ public class FullyGrindingMill {
         return groundPredsList;
     }
 
+    public List<GroundPredicate> createGroundPredicatesFromPredsHashMap(HashMap<PredicateSymbol, ArrayList<ArrayList<HyperCube>>> predsHyperCubeHashMap, Map<GroundPredicate, Integer> groundPredToIntegerMap) {
+        List<GroundPredicate> groundPredsList = new ArrayList<GroundPredicate>();
+        for(PredicateSymbol ps : predsHyperCubeHashMap.keySet()){
+            int lastIndex = predsHyperCubeHashMap.get(ps).size()-1;
+            List<HyperCube> unknownHyperCubes = predsHyperCubeHashMap.get(ps).get(lastIndex);
+            if(unknownHyperCubes.size() != 0)
+            {
+                for(HyperCube hc : unknownHyperCubes)
+                {
+                    int [][] permutations = permuteHyperCube(hc);
+                    for (int i = 0; i < permutations.length; i++) {
+                        GroundPredicate gp = new GroundPredicate();
+                        gp.symbol = new GroundPredicateSymbol(ps.id,ps.symbol,ps.values,ps.variable_types);
+                        gp.numPossibleValues = gp.symbol.values.values.size();
+                        for (int j = 0; j < permutations[i].length; j++) {
+                            gp.terms.add(permutations[i][j]);
+                        }
+                        groundPredToIntegerMap.put(gp, groundPredsList.size());
+                        groundPredsList.add(gp);
+                    }
+                }
+            }
+        }
+        return groundPredsList;
+    }
+
     public void removeEvidenceGroundPreds(GroundMLN groundMln, Evidence evidence) {
         for(Integer gpId : evidence.predIdVal.keySet())
         {
@@ -958,4 +984,5 @@ public class FullyGrindingMill {
             groundMln.groundPredToIntegerMap.remove(gp);
         }
     }
+
 }
